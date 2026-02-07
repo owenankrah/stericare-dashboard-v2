@@ -1,7 +1,10 @@
-import React from 'react';
-import { BarChart3, Package, Users, LogOut, Settings, Sun, Moon } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
+import BackendStatus from './components/BackendStatus';
+import Settings from './components/Settings';
 
 const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => {
+  const [showSettings, setShowSettings] = useState(false);
   // ==========================================
   // AVAILABLE APPS CONFIGURATION
   // ==========================================
@@ -119,6 +122,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <BackendStatus darkMode={darkMode} />
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className={`p-2 rounded-lg transition-colors ${
@@ -128,12 +132,13 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
                 {darkMode ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <button
-                onClick={() => alert('Settings coming soon!')}
+                onClick={() => setShowSettings(true)}
                 className={`p-2 rounded-lg transition-colors ${
                   darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                 }`}
+                title="Settings"
               >
-                <Settings size={20} />
+                <SettingsIcon size={20} />
               </button>
               <button
                 onClick={onLogout}
@@ -296,6 +301,16 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
           </p>
         </div>
       </footer>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <Settings
+          darkMode={darkMode}
+          user={user}
+          onClose={() => setShowSettings(false)}
+          onNavigateToUserManagement={() => onSelectApp('user-management')}
+        />
+      )}
     </div>
   );
 };

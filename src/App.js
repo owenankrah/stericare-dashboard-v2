@@ -7,6 +7,7 @@ import UserManagement from './components/UserManagement';
 import CRMModule from './components/CRMModule';
 import InventoryManagement from './components/InventoryManagement';
 import { supabase } from './lib/supabase';
+import { checkBackendHealth } from './lib/api';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -14,6 +15,7 @@ function App() {
   const [currentApp, setCurrentApp] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [backendWaking, setBackendWaking] = useState(false);
 
   useEffect(() => {
     checkSession();
@@ -29,6 +31,9 @@ function App() {
             
           setCurrentUser({ ...session.user, profile });
           setIsAuthenticated(true);
+          
+          // Wake up backend server after successful login
+          wakeUpBackend();
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setCurrentUser(null);
@@ -53,11 +58,41 @@ function App() {
           
         setCurrentUser({ ...session.user, profile });
         setIsAuthenticated(true);
+        
+        // Wake up backend if user has existing session
+        wakeUpBackend();
       }
     } catch (error) {
       console.error('Session error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const wakeUpBackend = async () => {
+    setBackendWaking(true);
+    console.log('🔄 Waking up backend server...');
+    
+    try {
+      const result = await checkBackendHealth();
+      if (result.success) {
+        console.log('✅ Backend is awake and ready!');
+      } else {
+        console.log('⏳ Backend is waking up... (may take 30-60 seconds)');
+        // Retry after delay for Render cold start
+        setTimeout(async () => {
+          const retryResult = await checkBackendHealth();
+          if (retryResult.success) {
+            console.log('✅ Backend is now awake!');
+          } else {
+            console.warn('⚠️ Backend may still be starting up');
+          }
+        }, 10000); // Retry after 10 seconds
+      }
+    } catch (error) {
+      console.error('Backend wake-up error:', error);
+    } finally {
+      setBackendWaking(false);
     }
   };
 
