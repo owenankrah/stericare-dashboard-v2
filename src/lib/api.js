@@ -12,12 +12,12 @@ const getApiBaseUrl = () => {
 
   // Development: localhost backend
   if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:3001';
+    return 'https://stericare-dashboard-v2-1.onrender.com';
   }
 
   // Production: use your deployed backend URL
   // You can also use relative URL if backend is on same domain
-  return 'http://localhost:3001'; // Change this to your Render URL
+  return 'https://stericare-dashboard-v2-1.onrender.com'; // Change this to your Render URL
 };
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -34,6 +34,17 @@ export const API_ENDPOINTS = {
   
   // Admin Operations
   CREATE_USER: `${API_BASE_URL}/api/admin/users`,
+  
+  // CRM Operations
+  CRM_REPORT: `${API_BASE_URL}/api/crm/customers/report`,
+  CRM_EXPORT: `${API_BASE_URL}/api/crm/customers/export`,
+  CRM_ANALYTICS: `${API_BASE_URL}/api/crm/analytics`,
+  
+  // Inventory Operations
+  INVENTORY_REPORT: `${API_BASE_URL}/api/inventory/report`,
+  INVENTORY_EXPORT: `${API_BASE_URL}/api/inventory/export`,
+  INVENTORY_ANALYTICS: `${API_BASE_URL}/api/inventory/analytics`,
+  INVENTORY_LOW_STOCK: `${API_BASE_URL}/api/inventory/low-stock`,
 };
 
 // Helper function to check backend health
@@ -167,6 +178,212 @@ export const createUser = async (userData) => {
   }
 };
 
+// ==========================================
+// CRM API FUNCTIONS
+// ==========================================
+
+// Get CRM customer report
+export const getCustomerReport = async () => {
+  try {
+    console.log('📊 Fetching customer report...');
+    
+    const response = await fetch(API_ENDPOINTS.CRM_REPORT, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch customer report');
+    }
+    
+    const data = await response.json();
+    console.log('✅ Customer report fetched');
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Customer report error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to fetch customer report'
+    };
+  }
+};
+
+// Export customers to CSV
+export const exportCustomersCSV = async () => {
+  try {
+    console.log('📥 Exporting customers to CSV...');
+    
+    const response = await fetch(API_ENDPOINTS.CRM_EXPORT);
+    
+    if (!response.ok) {
+      throw new Error('Failed to export customers');
+    }
+    
+    const blob = await response.blob();
+    console.log('✅ Customers exported');
+    return { success: true, blob };
+  } catch (error) {
+    console.error('❌ Export error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to export customers'
+    };
+  }
+};
+
+// Get CRM analytics
+export const getCRMAnalytics = async () => {
+  try {
+    console.log('📈 Fetching CRM analytics...');
+    
+    const response = await fetch(API_ENDPOINTS.CRM_ANALYTICS, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch analytics');
+    }
+    
+    const data = await response.json();
+    console.log('✅ Analytics fetched');
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to fetch analytics'
+    };
+  }
+};
+
+// ==========================================
+// INVENTORY API FUNCTIONS
+// ==========================================
+
+// Get inventory report
+export const getInventoryReport = async () => {
+  try {
+    console.log('📊 Fetching inventory report...');
+    
+    const response = await fetch(API_ENDPOINTS.INVENTORY_REPORT, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch inventory report');
+    }
+    
+    const data = await response.json();
+    console.log('✅ Inventory report fetched');
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Inventory report error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to fetch inventory report'
+    };
+  }
+};
+
+// Export inventory to CSV
+export const exportInventoryCSV = async () => {
+  try {
+    console.log('📥 Exporting inventory to CSV...');
+    
+    const response = await fetch(API_ENDPOINTS.INVENTORY_EXPORT);
+    
+    if (!response.ok) {
+      throw new Error('Failed to export inventory');
+    }
+    
+    const blob = await response.blob();
+    console.log('✅ Inventory exported');
+    return { success: true, blob };
+  } catch (error) {
+    console.error('❌ Export error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to export inventory'
+    };
+  }
+};
+
+// Get inventory analytics
+export const getInventoryAnalytics = async () => {
+  try {
+    console.log('📈 Fetching inventory analytics...');
+    
+    const response = await fetch(API_ENDPOINTS.INVENTORY_ANALYTICS, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch analytics');
+    }
+    
+    const data = await response.json();
+    console.log('✅ Inventory analytics fetched');
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Analytics error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to fetch analytics'
+    };
+  }
+};
+
+// Get low stock alerts
+export const getLowStockAlerts = async () => {
+  try {
+    console.log('⚠️ Fetching low stock alerts...');
+    
+    const response = await fetch(API_ENDPOINTS.INVENTORY_LOW_STOCK, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch low stock alerts');
+    }
+    
+    const data = await response.json();
+    console.log('✅ Low stock alerts fetched');
+    return { success: true, data };
+  } catch (error) {
+    console.error('❌ Low stock alerts error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      message: 'Failed to fetch low stock alerts'
+    };
+  }
+};
+
 export default {
   API_BASE_URL,
   API_ENDPOINTS,
@@ -175,4 +392,11 @@ export default {
   generateInvoicePDF,
   downloadBlob,
   createUser,
+  getCustomerReport,
+  exportCustomersCSV,
+  getCRMAnalytics,
+  getInventoryReport,
+  exportInventoryCSV,
+  getInventoryAnalytics,
+  getLowStockAlerts,
 };

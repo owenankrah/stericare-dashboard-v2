@@ -63,7 +63,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: profile } = await supabase
-        .from('user_profiles')
+        .from('user_profiles') 
         .select('*')
         .eq('id', user.id)
         .single();
@@ -76,7 +76,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     try {
       // Load products
       const { data: productsData } = await supabase
-        .from('products')
+        .from('products') 
         .select('*')
         .eq('is_active', true)
         .order('name');
@@ -84,7 +84,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       
       // Load customers
       const { data: customersData } = await supabase
-        .from('customers')
+        .from('customers') 
         .select('*')
         .eq('is_active', true)
         .order('name');
@@ -143,7 +143,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         const updated = { ...item, [field]: value };
         
         // Auto-populate pricing when product is selected
-        if (field === 'product' && value) {
+        if (field === 'product.name' && value) { // Adjusted field check for product selection
           updated.unitPrice = value.unit_price;
           updated.costPerUnit = value.cost_per_unit;
         }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Sun, Moon, Lock, User, Mail } from 'lucide-react';
+import { Sun, Moon, Lock, Mail } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 const Login = ({ onLogin, darkMode, setDarkMode }) => {
   const [email, setEmail] = useState('');
@@ -12,54 +13,57 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
     setError('');
     setIsLoading(true);
 
-    // ==========================================
-    // AUTHENTICATION LOGIC
-    // ==========================================
-    // Current: Simple email/password check
-    // Future: Replace with Supabase authentication
-    // 
-    // SUPABASE IMPLEMENTATION (when ready):
-    // 
-    // import { createClient } from '@supabase/supabase-js'
-    // const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    // 
-    // const { data, error } = await supabase.auth.signInWithPassword({
-    //   email: email,
-    //   password: password,
-    // })
-    // 
-    // if (error) {
-    //   setError(error.message);
-    //   setIsLoading(false);
-    //   return;
-    // }
-    // 
-    // if (data.user) {
-    //   localStorage.setItem('user', JSON.stringify(data.user));
-    //   localStorage.setItem('session', JSON.stringify(data.session));
-    //   onLogin(data.user);
-    // }
-    // ==========================================
+    try {
+      console.log('🔐 Attempting login with:', email);
 
-    // Simple validation for now
-    setTimeout(() => {
-      if (email && password) {
-        // Store user in localStorage (simple auth)
-        const user = {
-          email,
-          id: Date.now().toString(),
-          name: email.split('@')[0],
-          loginTime: new Date().toISOString()
-        };
-        
-        localStorage.setItem('user', JSON.stringify(user));
-        localStorage.setItem('isAuthenticated', 'true');
-        onLogin(user);
-      } else {
-        setError('Please enter both email and password');
+      // Supabase authentication
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (authError) {
+        console.error('❌ Login error:', authError);
+        setError(authError.message);
+        setIsLoading(false);
+        return;
       }
+
+      if (data.user) {
+        console.log('✅ Login successful:', data.user.email);
+        
+        // Get user profile
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError) {
+          console.error('⚠️ Profile error:', profileError);
+        }
+
+        // Create user object with profile
+        const userWithProfile = {
+          ...data.user,
+          profile: profile || null
+        };
+
+        console.log('👤 User role:', profile?.role);
+        
+        // Store in localStorage (for persistence)
+        localStorage.setItem('user', JSON.stringify(userWithProfile));
+        localStorage.setItem('session', JSON.stringify(data.session));
+        
+        // Call onLogin callback
+        onLogin(userWithProfile);
+      }
+    } catch (err) {
+      console.error('❌ Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -218,22 +222,22 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
               className="text-blue-600 hover:text-blue-700 font-medium"
               onClick={(e) => {
                 e.preventDefault();
-                alert('Registration feature coming soon!');
+                alert('Contact your administrator to create an account.');
               }}
             >
-              Sign up
+              Contact Admin
             </a>
           </p>
         </div>
 
-        {/* Demo Credentials (Remove in production) */}
+        {/* Admin Credentials Info */}
         <div className={`mt-6 p-4 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
           <p className={`text-xs font-semibold mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-            Demo Credentials:
+            Need Help?
           </p>
           <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Email: any email<br />
-            Password: any password
+            Use your Supabase credentials to login.<br />
+            Contact your administrator if you need access.
           </p>
         </div>
       </div>
