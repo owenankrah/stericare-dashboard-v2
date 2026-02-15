@@ -12,7 +12,7 @@ import { Mail } from "lucide-react";
  * Phase 3.3: Filters & Advanced Features
  */
 
-const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
+const SalesPipeline = ({ darkMode, currentUser }) => {
   const navigate = useNavigate();
   
   // State
@@ -32,7 +32,7 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
   const [filterStage, setFilterStage] = useState('all');
   const [filterMinValue, setFilterMinValue] = useState('');
   const [filterMaxValue, setFilterMaxValue] = useState('');
-  
+
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
 
@@ -46,11 +46,31 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
 
   // Pipeline stages
   const stages = [
-    { id: 'lead', name: 'Lead', color: 'gray', bgColor: 'bg-gray-50 dark:bg-gray-800' },
-    { id: 'qualified', name: 'Qualified', color: 'blue', bgColor: 'bg-blue-50 dark:bg-blue-900/20' },
-    { id: 'proposal', name: 'Proposal', color: 'purple', bgColor: 'bg-purple-50 dark:bg-purple-900/20' },
-    { id: 'negotiation', name: 'Negotiation', color: 'orange', bgColor: 'bg-orange-50 dark:bg-orange-900/20' },
-    { id: 'won', name: 'Won 🎉', color: 'green', bgColor: 'bg-green-50 dark:bg-green-900/20' }
+    { id: 'lead', 
+      name: 'Lead', 
+      color: 'gray', 
+      bgColor: 'bg-gray-50 dark:bg-gray-800' 
+    },
+    { id: 'qualified', 
+      name: 'Qualified', 
+      color: 'blue', 
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20' 
+    },
+    { id: 'proposal', 
+      name: 'Proposal', 
+      color: 'purple', 
+      bgColor: 'bg-purple-50 dark:bg-purple-900/20' 
+    },
+    { id: 'negotiation', 
+      name: 'Negotiation', 
+      color: 'orange', 
+      bgColor: 'bg-orange-50 dark:bg-orange-900/20' 
+    },
+    { id: 'won', 
+      name: 'Won 🎉', 
+      color: 'green', 
+      bgColor: 'bg-green-50 dark:bg-green-900/20' 
+    }
   ];
 
   // Load deals
@@ -70,7 +90,7 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
       // Transform invoices into deals
       const transformedDeals = (invoicesData || []).map((invoice, index) => {
         let stage = 'lead';
-        let probability = 50;
+        let probability = 20;
         
         if (invoice.payment_status === 'Paid') {
           stage = 'won';
@@ -79,7 +99,7 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
           const stageIndex = index % 4;
           const stageMap = ['lead', 'qualified', 'proposal', 'negotiation'];
           stage = stageMap[stageIndex];
-          probability = [50, 75, 85, 95][stageIndex];
+          probability = [20, 50, 75, 85][stageIndex];
         }
 
         return {
@@ -170,9 +190,9 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
             ...deal, 
             stage: targetStage,
             probability: targetStage === 'won' ? 100 : 
-                        targetStage === 'negotiation' ? 95 :
-                        targetStage === 'proposal' ? 85 :
-                        targetStage === 'qualified' ? 75 : 50
+                        targetStage === 'negotiation' ? 85 :
+                        targetStage === 'proposal' ? 75 :
+                        targetStage === 'qualified' ? 50 : 20
           }
         : deal
     );
@@ -182,7 +202,7 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
     setDragOverStage(null);
 
     // TODO: Update in database when you have a deals table
-    // await supabase.from('deals').update({ stage: targetStage }).eq('id', draggedDeal.id);
+    await supabase.from('deals').update({ stage: targetStage }).eq('id', draggedDeal.id);
   };
 
   // PHASE 3.2: DEAL MODAL HANDLERS
@@ -239,12 +259,12 @@ const SalesPipelineAdvanced = ({ darkMode, currentUser }) => {
   // Calculate deal probability based on stage and value
   const calculateProbability = (stage, value) => {
     const baseProbability = {
-      lead: 30,
-      qualified: 60,
+      lead: 20,
+      qualified: 50,
       proposal: 75,
-      negotiation: 90,
+      negotiation: 85,
       won: 100
-    }[stage] || 50;
+    }[stage] || 20;
 
     // Adjust based on deal size (larger deals slightly lower probability)
     const valueAdjustment = value > 50000 ? -5 : value > 20000 ? 0 : 5;

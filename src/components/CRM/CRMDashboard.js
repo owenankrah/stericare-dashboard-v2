@@ -232,14 +232,22 @@ const CRMDashboard = ({ darkMode }) => {
                 Manage and track your customer relationships
               </p>
             </div>
-            <button
-              onClick={() => navigate('/')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-              }`}
-            >
-              ← Back to Home
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/crm/pipeline')}
+                className="px-4 py-2 bg-[#3B82F6] text-white rounded-lg"
+              >
+                📊 Pipeline
+              </button>
+              <button
+                onClick={() => navigate('/')}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  darkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+                }`}
+              >
+                ← Back to Home
+              </button>
+            </div>
           </div>
         </div>
       </header>
