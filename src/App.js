@@ -6,6 +6,9 @@ import { supabase } from './lib/supabase';
 import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 
+
+
+
 // ==========================================
 // LAZY LOADING - Load modules only when needed
 // This reduces initial bundle size by ~70-80%
@@ -19,6 +22,10 @@ const InventoryManagement = lazy(() => import('./components/InventoryManagement'
 const InvoiceDetail = lazy(() => import('./components/InvoiceDetail'));
 const CustomerDetail = lazy(() => import('./components/CustomerDetail'));
 const NotFound = lazy(() => import('./components/NotFound'));
+const CRMDashboard = lazy(() => import('./components/CRM/CRMDashboard'));
+const CustomerDetailCRM = lazy(() => import('./components/CRM/CustomerDetailCRM'));
+const SalesPipeline = lazy(() => import('./components/CRM/SalesPipeline'));
+const DealManager = lazy(() => import('./components/CRM/DealManager'));
 
 // Loading fallback component
 const LoadingFallback = ({ darkMode }) => (
@@ -212,14 +219,12 @@ function App() {
               }
             />
 
+            {/* CRM Routes */}
             <Route
               path="/crm"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <CRMModule 
-                    darkMode={darkMode} 
-                    setDarkMode={setDarkMode} 
-                  />
+                  <CRMDashboard darkMode={darkMode} />
                 </ProtectedRoute>
               }
             />
@@ -228,7 +233,43 @@ function App() {
               path="/crm/customer/:id"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <CustomerDetail darkMode={darkMode} />
+                  <CustomerDetailCRM darkMode={darkMode} />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/crm/pipeline"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <SalesPipeline 
+                    darkMode={darkMode} 
+                    currentUser={currentUser} 
+                  />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/crm/deal/new"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <DealManager 
+                    darkMode={darkMode} 
+                    currentUser={currentUser} 
+                  />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/crm/deal/:id/edit"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <DealManager 
+                    darkMode={darkMode} 
+                    currentUser={currentUser} 
+                  />
                 </ProtectedRoute>
               }
             />

@@ -33,12 +33,12 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
     },
     {
       id: 'crm',
-      name: 'Customer CRM',
+      name: 'CRM',
       description: 'Customer relationship management and contact database',
       icon: Users,
       color: 'orange',
       status: 'active',
-      gradient: 'from-orange-500 to-orange-600'
+      gradient: 'from-purple-500 to-indigo-600'
     },
     {
       id: 'user-management',

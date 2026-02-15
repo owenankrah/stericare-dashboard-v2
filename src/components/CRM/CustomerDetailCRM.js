@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileText, TrendingUp, Edit } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 const CustomerDetailCRM = ({ darkMode }) => {
   const { id } = useParams();
@@ -10,6 +10,7 @@ const CustomerDetailCRM = ({ darkMode }) => {
   const [customer, setCustomer] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [activities, setActivities] = useState([]);
+  const [error, setError] = useState(null);   // ← ADD THIS
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
