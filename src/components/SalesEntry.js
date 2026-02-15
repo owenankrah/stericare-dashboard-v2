@@ -1,21 +1,22 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Plus, Trash2, Save, X, Search, Calculator } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { queryCache } from '../lib/queryCache';
+import { useNavigate } from 'react-router-dom';
 
 /**
- * SALES ENTRY COMPONENT
- * Pharma-C Medical Supplies (SteriCare)
- * 
- * Purpose: Fast, optimized sales entry with auto-invoice generation
- * Features:
- * - Product/Customer search with autocomplete
- * - Multi-line item support
- * - Real-time calculations
- * - Auto-generated invoice numbers
- * - Inventory hooks (commented - ready to activate)
+ * SALES ENTRY COMPONENT - OPTIMIZED
+ * Performance improvements:
+ * ✅ Cache customer dropdown (10 min TTL)
+ * ✅ Cache products dropdown (10 min TTL)
+ * ✅ Memoize invoice totals
+ * ✅ Memoize filtered customers
+ * ✅ useCallback for handlers
+ * ✅ Cache invalidation on save
  */
 
 const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
+  const navigate = useNavigate();
   // ==========================================
   // STATE MANAGEMENT
   // ==========================================
@@ -71,24 +72,66 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     }
   };
   
+  // ==========================================
+  // OPTIMIZATION 1: Cache Customer Dropdown
+  // ==========================================
+  
+  const loadCustomers = async () => {
+    const cacheKey = 'customers_dropdown';
+    
+    // Check cache (10 min TTL - stable data)
+    if (queryCache.isValid(cacheKey, 600000)) {
+      const cached = queryCache.get(cacheKey);
+      console.log('✅ Cache hit: Customers dropdown');
+      setCustomers(cached);
+      return;
+    }
+    
+    // Fetch from database
+    console.log('📡 Fetching customers...');
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name, customer_type, region')
+      .eq('is_active', true)
+      .order('name');
+    
+    setCustomers(data || []);
+    queryCache.set(cacheKey, data || [], 600000);
+    console.log('💾 Customers cached for 10 minutes');
+  };
+  
+  // ==========================================
+  // OPTIMIZATION 2: Cache Products Dropdown
+  // ==========================================
+  
+  const loadProducts = async () => {
+    const cacheKey = 'products_dropdown';
+    
+    // Check cache (10 min TTL)
+    if (queryCache.isValid(cacheKey, 600000)) {
+      const cached = queryCache.get(cacheKey);
+      console.log('✅ Cache hit: Products dropdown');
+      setProducts(cached);
+      return;
+    }
+    
+    // Fetch from database
+    console.log('📡 Fetching products...');
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .order('product_name');
+    
+    setProducts(data || []);
+    queryCache.set(cacheKey, data || [], 600000);
+    console.log('💾 Products cached for 10 minutes');
+  };
+  
   const loadMasterData = async () => {
     setLoading(true);
     try {
-      // Load products
-      const { data: productsData } = await supabase
-        .from('products') 
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      setProducts(productsData || []);
-      
-      // Load customers
-      const { data: customersData } = await supabase
-        .from('customers') 
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-      setCustomers(customersData || []);
+      await Promise.all([loadCustomers(), loadProducts()]);
     } catch (error) {
       console.error('Error loading master data:', error);
     } finally {
@@ -97,10 +140,13 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
   };
   
   // ==========================================
-  // CUSTOMER SEARCH
+  // OPTIMIZATION 3: Memoize Filtered Customers
   // ==========================================
+  
   const filteredCustomers = useMemo(() => {
     if (!customerSearch) return customers;
+    
+    console.log('🔄 Filtering customers...');
     return customers.filter(c =>
       c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
       c.region.toLowerCase().includes(customerSearch.toLowerCase())
@@ -116,9 +162,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
   // ==========================================
   // LINE ITEM MANAGEMENT
   // ==========================================
-  const addLineItem = () => {
-    setLineItems([
-      ...lineItems,
+  
+  const addLineItem = useCallback(() => {
+    setLineItems(prev => [
+      ...prev,
       {
         id: Date.now(),
         product: null,
@@ -129,40 +176,46 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         discount: 0
       }
     ]);
-  };
+  }, []);
   
-  const removeLineItem = (id) => {
-    if (lineItems.length > 1) {
-      setLineItems(lineItems.filter(item => item.id !== id));
-    }
-  };
+  const removeLineItem = useCallback((id) => {
+    setLineItems(prev => {
+      if (prev.length > 1) {
+        return prev.filter(item => item.id !== id);
+      }
+      return prev;
+    });
+  }, []);
   
-  const updateLineItem = (id, field, value) => {
-    setLineItems(lineItems.map(item => {
+  const updateLineItem = useCallback((id, field, value) => {
+    setLineItems(prev => prev.map(item => {
       if (item.id === id) {
         const updated = { ...item, [field]: value };
         
         // Auto-populate pricing when product is selected
-        if (field === 'product.name' && value) { // Adjusted field check for product selection
-          updated.unitPrice = value.unit_price;
-          updated.costPerUnit = value.cost_per_unit;
+        if (field === 'product' && value) {
+          updated.unitPrice = value.selling_price || value.unit_price || 0;
+          updated.costPerUnit = value.cost_per_unit || 0;
         }
         
         // Auto-calculate units from boxes
         if (field === 'boxes' && updated.product) {
-          updated.units = parseInt(value || 0) * updated.product.units_per_box;
+          updated.units = parseInt(value || 0) * (updated.product.units_per_box || 1);
         }
         
         return updated;
       }
       return item;
     }));
-  };
+  }, []);
   
   // ==========================================
-  // CALCULATIONS
+  // OPTIMIZATION 4: Memoize Invoice Totals & Calculations
   // ==========================================
+  
   const calculations = useMemo(() => {
+    console.log('🔄 Calculating invoice totals...');
+    
     let subtotal = 0;
     let totalCost = 0;
     let totalBoxes = 0;
@@ -199,9 +252,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
   }, [lineItems, overallDiscount]);
   
   // ==========================================
-  // SAVE INVOICE
+  // OPTIMIZATION 5: useCallback for Save Handler
   // ==========================================
-  const saveInvoice = async () => {
+  
+  const saveInvoice = useCallback(async () => {
     // Validation
     if (!selectedCustomer) {
       alert('Please select a customer');
@@ -247,12 +301,15 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         salesperson_name: currentUser.full_name,
         month,
         quarter,
+        subtotal: calculations.subtotal,
         discount_amount: calculations.discountAmount,
         total_amount: calculations.total,
         total_cost: calculations.totalCost,
         total_profit: calculations.profit,
         margin_percentage: calculations.margin,
-        notes
+        notes,
+        status: 'Active',
+        payment_status: saleType === 'Cash' ? 'Paid' : 'Pending'
       };
       
       const { data: invoice, error: invoiceError } = await supabase
@@ -277,8 +334,8 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
           return {
             invoice_id: invoice.id,
             product_id: item.product.id,
-            product_name: item.product.name,
-            product_sku: item.product.sku,
+            product_name: item.product.product_name || item.product.name,
+            product_code: item.product.product_code || item.product.sku,
             boxes_sold: item.boxes,
             units_sold: item.units,
             unit_price: item.unitPrice,
@@ -315,7 +372,14 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
           // Continue even if inventory fails (can be adjusted manually)
         }
       }
+      
       // ==========================================
+      // OPTIMIZATION 6: Invalidate Cache on Save
+      // ==========================================
+      queryCache.clearPattern('invoices_');
+      queryCache.clearPattern('inventory_');
+      queryCache.clearPattern('products_');
+      console.log('🗑️ Caches cleared after invoice creation');
       
       alert(`✅ Invoice ${invoiceNumber} created successfully!`);
       
@@ -333,9 +397,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [selectedCustomer, lineItems, currentUser, saleDate, saleType, calculations, notes, overallDiscount, onInvoiceCreated]);
   
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setSelectedCustomer(null);
     setCustomerSearch('');
     setSaleType('Cash');
@@ -353,7 +417,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         discount: 0
       }
     ]);
-  };
+  }, []);
   
   // ==========================================
   // RENDER
@@ -499,7 +563,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     <option value="">Select product...</option>
                     {products.map(product => (
                       <option key={product.id} value={product.id}>
-                        {product.name} (₵{product.unit_price})
+                        {product.product_name} (₵{product.selling_price || product.unit_price})
                       </option>
                     ))}
                   </select>
@@ -616,7 +680,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
           </div>
           
           {/* Right - Only visible to admin/manager */}
-          {(currentUser?.profile?.role === 'admin' || currentUser?.profile?.role === 'manager') && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'manager') && (
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm">Cost:</span>
@@ -641,7 +705,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
           )}
           
           {/* Sales rep view - only show total units */}
-          {currentUser?.profile?.role === 'sales_rep' && (
+          {currentUser?.role === 'sales_rep' && (
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-sm">Total Units:</span>

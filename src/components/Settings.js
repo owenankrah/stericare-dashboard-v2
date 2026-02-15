@@ -5,6 +5,7 @@ import {
   Download, Upload, RefreshCw, AlertCircle, CheckCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * SETTINGS MODAL - FULLY FUNCTIONAL
@@ -17,6 +18,7 @@ import { supabase } from '../lib/supabase';
  */
 
 const Settings = ({ darkMode, setDarkMode, onClose, user, onNavigateToUserManagement }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('account');
   
   // Account editing

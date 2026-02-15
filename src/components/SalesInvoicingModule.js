@@ -3,6 +3,7 @@ import { FileText, PlusCircle, List } from 'lucide-react';
 import SalesEntry from './SalesEntry';
 import InvoiceList from './InvoiceList';
 import InvoiceViewer from './InvoiceViewer';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * SALES & INVOICING MODULE
@@ -15,7 +16,8 @@ import InvoiceViewer from './InvoiceViewer';
  * - Inventory hooks (dormant)
  */
 
-const SalesInvoicingModule = ({ darkMode, setDarkMode, onBack }) => {
+const SalesInvoicingModule = ({ darkMode, setDarkMode }) => {
+  const navigate = useNavigate();
   const [currentView, setCurrentView] = useState('list'); // 'list', 'new', 'view'
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   
@@ -41,7 +43,7 @@ const SalesInvoicingModule = ({ darkMode, setDarkMode, onBack }) => {
             <div>
               <div className="flex items-center gap-4">
                 <button
-                  onClick={onBack}
+                  onClick={() => navigate('/')}
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     darkMode
                       ? 'bg-gray-700 hover:bg-gray-600 text-white'

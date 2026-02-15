@@ -1,11 +1,14 @@
 import React from 'react';
 import { AlertTriangle, X, Eye, UserCheck } from 'lucide-react';
 
+
+
 /**
  * DUPLICATE WARNING MODAL
  * Shows when potential duplicate customer/company/contact is detected
  * Displays who created the original entry to prevent conflicts
  */
+
 
 const DuplicateWarning = ({ 
   isOpen, 
@@ -17,6 +20,8 @@ const DuplicateWarning = ({
 }) => {
   if (!isOpen || !duplicateData) return null;
 
+
+  
   const {
     type, // 'company', 'person', 'customer'
     name, // Duplicate name found
@@ -26,6 +31,8 @@ const DuplicateWarning = ({
     companyName, // For people - which company they're at
     additionalMatches // Array of other potential matches
   } = duplicateData;
+
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">

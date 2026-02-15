@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { checkBackendHealth, API_BASE_URL } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * BACKEND STATUS INDICATOR
  * Shows connection status to backend API
  */
 
+
 const BackendStatus = ({ darkMode }) => {
+  const navigate = useNavigate();
   const [status, setStatus] = useState('checking'); // checking, connected, disconnected
   const [lastCheck, setLastCheck] = useState(null);
   const [checking, setChecking] = useState(false);
+
 
   useEffect(() => {
     checkStatus();

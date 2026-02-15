@@ -1,17 +1,8 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Sun, Moon, Lock, Mail } from 'lucide-react';
+import { Sun, Moon, Lock, User, Mail } from 'lucide-react';
 import { supabase } from './lib/supabase';
+// wakeUpBackend removed - UptimeRobot keeps backend alive
 import ForgotPassword from './ForgotPassword';
-
-/**
- * LOGIN COMPONENT - With React Router
- * Features:
- * - Automatic redirect after successful login
- * - Preserves intended destination (redirect to page user was trying to access)
- * - No backend wake-up (handled by UptimeRobot)
- * - Forgot password integration
- */
 
 const Login = ({ onLogin, darkMode, setDarkMode }) => {
   const [email, setEmail] = useState('');
@@ -20,9 +11,6 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
   const [error, setError] = useState('');
   const [loadingMessage, setLoadingMessage] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-
-  const navigate = useNavigate();
-  const location = useLocation();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -47,17 +35,10 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
         .eq('id', data.user.id)
         .single();
 
-      // Call parent onLogin handler
       onLogin({
         ...data.user,
         profile: profile || { full_name: data.user.email.split('@')[0], role: 'sales_rep' }
       });
-
-      // Redirect after successful login
-      // If user was trying to access a specific page, redirect there
-      // Otherwise, redirect to home (app selector)
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
 
     } catch (error) {
       setError(error.message || 'Login failed');
@@ -83,7 +64,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
         onClick={() => setDarkMode(!darkMode)}
         className={`fixed top-6 right-6 p-3 rounded-lg ${
           darkMode ? 'bg-gray-800 text-yellow-400' : 'bg-white text-gray-700'
-        } shadow-lg z-10`}
+        } shadow-lg`}
       >
         {darkMode ? <Sun size={20} /> : <Moon size={20} />}
       </button>
@@ -106,6 +87,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
+
           <div>
             <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               Email
@@ -120,7 +102,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
                 required
                 className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
-                } focus:ring-2 focus:ring-blue-500 focus:outline-none`}
+                } focus:ring-2 focus:ring-blue-500`}
               />
             </div>
           </div>
@@ -140,7 +122,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
                 minLength={6}
                 className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
-                } focus:ring-2 focus:ring-blue-500 focus:outline-none`}
+                } focus:ring-2 focus:ring-blue-500`}
               />
             </div>
           </div>
@@ -166,22 +148,11 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
             </div>
           )}
 
-          {loadingMessage && (
-            <div className={`p-3 rounded-lg text-sm ${
-              darkMode ? 'bg-blue-900 text-blue-200' : 'bg-blue-100 text-blue-700'
-            }`}>
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
-                {loadingMessage}
-              </div>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-3 rounded-lg font-medium text-white transition-colors ${
-              isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+            className={`w-full py-3 rounded-lg font-medium text-white ${
+              isLoading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
             {isLoading ? 'Signing in...' : 'Sign In'}

@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Users, Plus, Edit2, Trash2, Key, X, Check, Shield, UserCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { createUser } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * USER MANAGEMENT COMPONENT
  * Admin-only screen for creating and managing user accounts
  */
 
-const UserManagement = ({ darkMode, onBack }) => {
+
+const UserManagement = ({ darkMode }) => {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -191,16 +194,14 @@ const UserManagement = ({ darkMode, onBack }) => {
         <div className="flex justify-between items-center mb-6">
           <div>
             <div className="flex items-center gap-4 mb-2">
-              {onBack && (
                 <button
-                  onClick={onBack}
+                  onClick={() => navigate('/')}
                   className={`px-4 py-2 rounded-lg ${
                     darkMode ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-100'
                   } border ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}
                 >
                   ← Back
                 </button>
-              )}
               <div>
                 <h1 className={`text-2xl md:text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   User Management

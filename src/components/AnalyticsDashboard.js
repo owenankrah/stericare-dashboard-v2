@@ -1,9 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Sun, Moon, TrendingUp, RefreshCw, Download } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
-const AnalyticsDashboard = ({ darkMode, setDarkMode, onBack }) => {
+
+
+const AnalyticsDashboard = ({ darkMode, setDarkMode}) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [salesData, setSalesData] = useState([]);
   const [filters, setFilters] = useState({
@@ -12,6 +16,7 @@ const AnalyticsDashboard = ({ darkMode, setDarkMode, onBack }) => {
     saleType: 'All Types',
     salesPerson: 'All Sales People'
   });
+
 
   useEffect(() => {
     loadData();
@@ -114,7 +119,7 @@ const AnalyticsDashboard = ({ darkMode, setDarkMode, onBack }) => {
       <div className="max-w-7xl mx-auto p-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            {onBack && <button onClick={onBack} className={`px-4 py-2 rounded-lg mb-2 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>← Back</button>}
+            <button onClick={() => navigate('/')} className={`px-4 py-2 rounded-lg mb-2 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'}`}>← Back</button>
             <h1 className={`text-4xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Analytics Dashboard</h1>
             <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
               {salesData.length} records • Data from Supabase

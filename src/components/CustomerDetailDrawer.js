@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { X, Phone, Mail, MapPin, Building } from "lucide-react";
+import { useNavigate } from 'react-router-dom';
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -10,8 +11,10 @@ const TABS = [
   { key: "credit", label: "Credit Summary" },
 ];
 
+
 const CustomerDetailDrawer = ({ customer, open, onClose, darkMode }) => {
   const [activeTab, setActiveTab] = useState("overview");
+const navigate = useNavigate();
 
   if (!open || !customer) return null;
 

@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FileText, Download, Eye, Search, Filter, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { queryCache } from '../lib/queryCache';
+import { useNavigate } from 'react-router-dom';
 
 /**
- * INVOICE LIST COMPONENT
- * Displays all invoices with search, filter, and PDF download
+ * INVOICE LIST COMPONENT - OPTIMIZED
+ * Performance improvements:
+ * ✅ Query caching (5 min TTL)
+ * ✅ useMemo for filtered invoices
+ * ✅ useCallback for handlers
+ * ✅ Cache invalidation on data changes
  */
+
 
 const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const [invoices, setInvoices] = useState([]);
@@ -15,14 +22,33 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const navigate = useNavigate();
   
   useEffect(() => {
     loadInvoices();
   }, []);
   
+  // ==========================================
+  // PERFORMANCE: Query Caching
+  // ==========================================
+  
   const loadInvoices = async () => {
     setLoading(true);
+    const cacheKey = 'invoices_all';
+    
     try {
+      // Check cache first ✅
+      if (queryCache.isValid(cacheKey)) {
+        const cached = queryCache.get(cacheKey);
+        console.log('✅ Cache hit: Loading invoices from cache');
+        setInvoices(cached);
+        setLoading(false);
+        return;
+      }
+      
+      // Cache miss - fetch from database
+      console.log('📡 Cache miss: Fetching invoices from database');
+      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -55,7 +81,13 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
       const { data, error } = await query;
       
       if (error) throw error;
+      
       setInvoices(data || []);
+      
+      // Cache for 5 minutes ✅
+      queryCache.set(cacheKey, data || [], 300000);
+      console.log('💾 Invoices cached for 5 minutes');
+      
     } catch (error) {
       console.error('Error loading invoices:', error);
     } finally {
@@ -63,32 +95,44 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
     }
   };
   
-  // Filter invoices
-  const filteredInvoices = invoices.filter(invoice => {
-    // Search filter
-    const matchesSearch = 
-      invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Type filter
-    const matchesType = filterType === 'All' || invoice.sale_type === filterType;
-    
-    // Status filter
-    const matchesStatus = filterStatus === 'All' || invoice.status === filterStatus;
-    
-    // Date filter
-    let matchesDate = true;
-    if (startDate) {
-      matchesDate = matchesDate && new Date(invoice.invoice_date) >= new Date(startDate);
-    }
-    if (endDate) {
-      matchesDate = matchesDate && new Date(invoice.invoice_date) <= new Date(endDate);
-    }
-    
-    return matchesSearch && matchesType && matchesStatus && matchesDate;
-  });
+  // ==========================================
+  // PERFORMANCE: useMemo for filtered invoices
+  // Only recalculates when dependencies change
+  // ==========================================
   
-  const downloadPDF = async (invoice) => {
+  const filteredInvoices = useMemo(() => {
+    console.log('🔄 Filtering invoices...');
+    
+    return invoices.filter(invoice => {
+      // Search filter
+      const matchesSearch = 
+        invoice.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      // Type filter
+      const matchesType = filterType === 'All' || invoice.sale_type === filterType;
+      
+      // Status filter
+      const matchesStatus = filterStatus === 'All' || invoice.status === filterStatus;
+      
+      // Date filter
+      let matchesDate = true;
+      if (startDate) {
+        matchesDate = matchesDate && new Date(invoice.invoice_date) >= new Date(startDate);
+      }
+      if (endDate) {
+        matchesDate = matchesDate && new Date(invoice.invoice_date) <= new Date(endDate);
+      }
+      
+      return matchesSearch && matchesType && matchesStatus && matchesDate;
+    });
+  }, [invoices, searchTerm, filterType, filterStatus, startDate, endDate]);
+  
+  // ==========================================
+  // PERFORMANCE: useCallback for stable function references
+  // ==========================================
+  
+  const downloadPDF = useCallback(async (invoice) => {
     try {
       // Call API endpoint to generate PDF
       const response = await fetch('/api/invoices/pdf', {
@@ -107,11 +151,12 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
       a.href = url;
       a.download = `${invoice.invoice_number}.pdf`;
       a.click();
+      window.URL.revokeObjectURL(url); // Cleanup
     } catch (error) {
       console.error('Error downloading PDF:', error);
       alert('Failed to download PDF. Please try again.');
     }
-  };
+  }, []);
   
   if (loading) {
     return (
@@ -232,7 +277,14 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
                   key={invoice.id}
                   className={`border-b ${darkMode ? 'border-gray-700 hover:bg-gray-750' : 'border-gray-200 hover:bg-gray-50'}`}
                 >
-                  <td className="px-4 py-3 text-sm font-medium">{invoice.invoice_number}</td>
+                  <td className="px-4 py-3 text-sm font-medium">
+                    <span
+                      onClick={() => navigate(`/invoice/${invoice.invoice_number}`)}
+                      className="cursor-pointer hover:underline text-blue-600"
+                    >
+                      {invoice.invoice_number}
+                    </span>
+                    </td>
                   <td className="px-4 py-3 text-sm">{new Date(invoice.invoice_date).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-sm">{invoice.customer_name}</td>
                   <td className="px-4 py-3 text-sm">

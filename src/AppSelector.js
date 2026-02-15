@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
 import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import BackendStatus from './components/BackendStatus';
 import Settings from './components/Settings';
 
-const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => {
+const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
   const [showSettings, setShowSettings] = useState(false);
+  const navigate = useNavigate();
+
   // ==========================================
   // AVAILABLE APPS CONFIGURATION
-  // ==========================================
-  // Add new apps here as they're developed
-  // Each app should have: id, name, description, icon, color, status
-  // Status: 'active' | 'coming-soon' | 'beta'
   // ==========================================
   
   const apps = [
@@ -49,7 +48,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
       color: 'red',
       status: 'active',
       gradient: 'from-red-500 to-red-600',
-      adminOnly: true // Only show to admin users
+      adminOnly: true
     },
     {
       id: 'inventory',
@@ -72,37 +71,16 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
 
   const handleAppClick = (app) => {
     if (app.status === 'active') {
-      // ==========================================
-      // APP ROUTING LOGIC
-      // ==========================================
-      // Current: Callback to parent component
-      // Future: React Router navigation
-      // 
-      // REACT ROUTER IMPLEMENTATION (when ready):
-      // import { useNavigate } from 'react-router-dom';
-      // const navigate = useNavigate();
-      // navigate(`/apps/${app.id}`);
-      // 
-      // OR with Supabase for app access control:
-      // 
-      // const { data: hasAccess } = await supabase
-      //   .from('user_app_access')
-      //   .select('*')
-      //   .eq('user_id', user.id)
-      //   .eq('app_id', app.id)
-      //   .single();
-      // 
-      // if (hasAccess) {
-      //   navigate(`/apps/${app.id}`);
-      // } else {
-      //   alert('You don\'t have access to this app');
-      // }
-      // ==========================================
-      
-      onSelectApp(app.id);
+      // Navigate using React Router
+      navigate(`/${app.id}`);
     } else {
       alert(`${app.name} is coming soon!`);
     }
+  };
+
+  const handleNavigateToUserManagement = () => {
+    setShowSettings(false);
+    navigate('/user-management');
   };
 
   return (
@@ -115,10 +93,10 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
           <div className="flex justify-between items-center">
             <div>
               <h1 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-                SteriCare Portal
+                Pharma-C Business Management Portal 
               </h1>
               <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Welcome back, {user.name || user.email}
+                Welcome back, {user?.profile?.full_name || user?.name || user?.email}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -220,6 +198,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
                       app.color === 'blue' ? 'text-blue-600' :
                       app.color === 'green' ? 'text-green-600' :
                       app.color === 'purple' ? 'text-purple-600' :
+                      app.color === 'red' ? 'text-red-600' :
                       'text-orange-600'
                     }`}>
                       Click to open →
@@ -239,7 +218,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
         {/* Info Section */}
         <div className={`mt-12 p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
           <h3 className={`text-lg font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-            About the SteriCare Portal
+            About the Pharma-C Portal
           </h3>
           <p className={`mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             This integrated platform helps you manage all aspects of your medical products business:
@@ -250,44 +229,44 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
               <span><strong>Analytics Dashboard:</strong> Track sales, profitability, and team performance</span>
             </li>
             <li className="flex items-start">
-              <span className="text-green-500 mr-2">◇</span>
-              <span><strong>Sales Recorder:</strong> Quick entry for daily transactions (Coming Soon)</span>
+              <span className="text-green-500 mr-2">✓</span>
+              <span><strong>Sales & Invoicing:</strong> Create invoices and manage transactions</span>
             </li>
             <li className="flex items-start">
-              <span className="text-purple-500 mr-2">◇</span>
-              <span><strong>Inventory Management:</strong> Real-time stock tracking and alerts (Coming Soon)</span>
+              <span className="text-orange-500 mr-2">✓</span>
+              <span><strong>Customer CRM:</strong> Manage relationships and customer data</span>
             </li>
             <li className="flex items-start">
-              <span className="text-orange-500 mr-2">◇</span>
-              <span><strong>Customer CRM:</strong> Manage relationships and customer data (Coming Soon)</span>
+              <span className="text-purple-500 mr-2">✓</span>
+              <span><strong>Inventory Management:</strong> Real-time stock tracking and alerts</span>
             </li>
           </ul>
         </div>
 
-        {/* Quick Stats (if needed) */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
           <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
             <div className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              1
+              {visibleApps.filter(app => app.status === 'active').length}
             </div>
             <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Active Application
+              Active Applications
             </div>
           </div>
           <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
             <div className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              3
+              {user?.profile?.role === 'admin' ? 'Admin' : 'User'}
             </div>
             <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Coming Soon
+              Your Access Level
             </div>
           </div>
           <div className={`p-6 rounded-xl ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
             <div className={`text-3xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
-              More
+              24/7
             </div>
             <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-              Apps in Development
+              System Availability
             </div>
           </div>
         </div>
@@ -297,7 +276,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
       <footer className={`mt-12 border-t ${darkMode ? 'border-gray-800' : 'border-gray-200'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className={`text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-            © 2026 SteriCare Medical Products. All rights reserved.
+            © 2026 Pharma-C Medical Products. All rights reserved.
           </p>
         </div>
       </footer>
@@ -308,7 +287,7 @@ const AppSelector = ({ user, onLogout, onSelectApp, darkMode, setDarkMode }) => 
           darkMode={darkMode}
           user={user}
           onClose={() => setShowSettings(false)}
-          onNavigateToUserManagement={() => onSelectApp('user-management')}
+          onNavigateToUserManagement={handleNavigateToUserManagement}
         />
       )}
     </div>

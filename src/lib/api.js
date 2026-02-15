@@ -9,18 +9,18 @@ const getApiBaseUrl = () => {
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
-
+  
   // Development: localhost backend
   if (process.env.NODE_ENV === 'development') {
-    return 'https://stericare-dashboard-v2-1.onrender.com';
+    return 'http://localhost:3001';
   }
-
-  // Production: use your deployed backend URL
-  // You can also use relative URL if backend is on same domain
-  return 'https://stericare-dashboard-v2-1.onrender.com'; // Change this to your Render URL
+  
+  // ✅ Production: Render backend URL
+  return 'https://stericare-dashboard-v2-1.onrender.com';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
+
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -384,7 +384,8 @@ export const getLowStockAlerts = async () => {
   }
 };
 
-export default {
+
+const api = {
   API_BASE_URL,
   API_ENDPOINTS,
   checkBackendHealth,
@@ -400,3 +401,4 @@ export default {
   getInventoryAnalytics,
   getLowStockAlerts,
 };
+export default api;

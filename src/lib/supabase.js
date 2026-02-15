@@ -7,8 +7,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://fcqfywylbvkxayafpedy.supabase.co';
 
 // REPLACE THIS WITH YOUR ACTUAL ANON KEY FROM:
-// https://supabase.com/dashboard/project/fcqfywylbvkxayafpedy/settings/api
-// Copy the "anon" / "public" key (the long JWT token)
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjcWZ5d3lsYnZreGF5YWZwZWR5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5NzQyODEsImV4cCI6MjA4NTU1MDI4MX0.h8aaDs5IGt_dnrZxOzBwDtFpvKslglxzFTFFiI9JL7Q';
 
 // Validate configuration

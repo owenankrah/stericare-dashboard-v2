@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import { 
   Package, Plus, AlertTriangle, TrendingUp, TrendingDown, Search, 
   Edit2, History, Download, BarChart3, RefreshCw, X, Bell, 
@@ -12,13 +14,16 @@ import {
   getLowStockAlerts,
   downloadBlob 
 } from '../lib/api';
+import { queryCache } from '../lib/queryCache';
 
 /**
  * INVENTORY MANAGEMENT MODULE - ENHANCED
  * Full-featured inventory with backend analytics integration
  */
 
-const InventoryManagement = ({ darkMode, onBack }) => {
+
+const InventoryManagement = ({ darkMode}) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [inventory, setInventory] = useState([]);
   const [products, setProducts] = useState([]);
@@ -79,6 +84,20 @@ const InventoryManagement = ({ darkMode, onBack }) => {
       setCurrentUser({ ...user, profile });
     }
   };
+
+// Cache products
+const loadProducts = async () => {
+  const cacheKey = 'products_all';
+  if (queryCache.isValid(cacheKey)) {
+    setProducts(queryCache.get(cacheKey));
+    return;
+  }
+  const { data } = await supabase.from('products').select('*');
+  queryCache.set(cacheKey, data, 300000);
+  setProducts(data);
+};
+
+
 
   const loadData = async () => {
     setLoading(true);
@@ -335,16 +354,14 @@ const InventoryManagement = ({ darkMode, onBack }) => {
         <div className="mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              {onBack && (
                 <button
-                  onClick={onBack}
+                  onClick={() => navigate('/')}
                   className={`px-4 py-2 rounded-lg transition-colors ${
                     darkMode ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-white hover:bg-gray-100'
                   } border ${darkMode ? 'border-gray-700' : 'border-gray-300'}`}
                 >
                   ← Back
                 </button>
-              )}
               <div>
                 <h1 className={`text-2xl md:text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                   Inventory Management
