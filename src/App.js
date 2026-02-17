@@ -5,6 +5,8 @@ import AppSelector from './AppSelector';
 import { supabase } from './lib/supabase';
 import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/ErrorBoundary';
+import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './api';
 
 
 
@@ -53,6 +55,14 @@ function App() {
     }
   });
   const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+  startKeepAlive();
+  prefetchCommonData();
+  return () => stopKeepAlive();
+}, []);
+
+
 
   // Check URL for password reset
   useEffect(() => {
@@ -141,6 +151,7 @@ function App() {
 
   if (loading) {
     return (
+      <ErrorBoundary darkMode={darkMode}>
       <div className={`min-h-screen flex items-center justify-center ${
         darkMode ? 'bg-gray-900' : 'bg-gray-50'
       }`}>
@@ -151,10 +162,12 @@ function App() {
           </p>
         </div>
       </div>
+      </ErrorBoundary>
     );
   }
 
   return (
+    <ErrorBoundary darkMode={darkMode}>
     <BrowserRouter>
       <div className="App">
         <Suspense fallback={<LoadingFallback darkMode={darkMode} />}>
@@ -310,6 +323,7 @@ function App() {
         </Suspense>
       </div>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

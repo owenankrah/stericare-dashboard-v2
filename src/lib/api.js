@@ -1,404 +1,377 @@
+// src/api.js - OPTIMIZED VERSION
+// Performance improvements: caching, retry logic, error handling
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+// ✅ Request cache (5 min TTL)
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// ✅ Request deduplication (prevent multiple identical requests)
+const pendingRequests = new Map();
+
+// ✅ Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
+
 /**
- * API CONFIGURATION
- * Central configuration for all backend API endpoints
+ * Enhanced fetch with caching, retry, and error handling
  */
-
-// Determine API base URL based on environment
-const getApiBaseUrl = () => {
-  // Environment variable takes priority
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
-  }
+async function enhancedFetch(url, options = {}, cacheKey = null) {
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
   
-  // Development: localhost backend
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:3001';
-  }
-  
-  // ✅ Production: Render backend URL
-  return 'https://stericare-dashboard-v2-1.onrender.com';
-};
-
-export const API_BASE_URL = getApiBaseUrl();
-
-
-// API Endpoints
-export const API_ENDPOINTS = {
-  // Health & Info
-  HEALTH: `${API_BASE_URL}/health`,
-  INFO: `${API_BASE_URL}/`,
-  
-  // Invoice Operations
-  INVOICE_PDF: `${API_BASE_URL}/api/invoices/pdf`,
-  INVOICE_EMAIL: `${API_BASE_URL}/api/invoices/email`,
-  
-  // Admin Operations
-  CREATE_USER: `${API_BASE_URL}/api/admin/users`,
-  
-  // CRM Operations
-  CRM_REPORT: `${API_BASE_URL}/api/crm/customers/report`,
-  CRM_EXPORT: `${API_BASE_URL}/api/crm/customers/export`,
-  CRM_ANALYTICS: `${API_BASE_URL}/api/crm/analytics`,
-  
-  // Inventory Operations
-  INVENTORY_REPORT: `${API_BASE_URL}/api/inventory/report`,
-  INVENTORY_EXPORT: `${API_BASE_URL}/api/inventory/export`,
-  INVENTORY_ANALYTICS: `${API_BASE_URL}/api/inventory/analytics`,
-  INVENTORY_LOW_STOCK: `${API_BASE_URL}/api/inventory/low-stock`,
-};
-
-// Helper function to check backend health
-export const checkBackendHealth = async () => {
-  try {
-    const response = await fetch(API_ENDPOINTS.HEALTH);
-    if (!response.ok) {
-      throw new Error('Backend not responding');
+  // ✅ Check cache for GET requests
+  if (options.method === 'GET' || !options.method) {
+    if (cacheKey && cache.has(cacheKey)) {
+      const cached = cache.get(cacheKey);
+      if (Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log('📦 Cache hit:', cacheKey);
+        return cached.data;
+      }
+      cache.delete(cacheKey);
     }
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    console.error('Backend health check failed:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Backend server is not running or not reachable'
-    };
+    
+    // ✅ Deduplicate identical pending requests
+    if (cacheKey && pendingRequests.has(cacheKey)) {
+      console.log('⏳ Waiting for pending request:', cacheKey);
+      return pendingRequests.get(cacheKey);
+    }
   }
-};
-
-// Helper function to wake up backend (for free tier Render that sleeps)
-export const wakeUpBackend = async (maxRetries = 3, retryDelay = 2000) => {
-  console.log('🔄 Waking up backend server...');
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  // ✅ Fetch with retry logic
+  const fetchWithRetry = async (retryCount = 0) => {
     try {
-      console.log(`Attempt ${attempt}/${maxRetries}...`);
-      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
       
-      const response = await fetch(API_ENDPOINTS.HEALTH, {
+      const response = await fetch(fullUrl, {
+        ...options,
         signal: controller.signal,
         headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Content-Type': 'application/json',
+          ...options.headers
         }
       });
       
       clearTimeout(timeoutId);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Backend is awake!', data);
-        return { success: true, data, attempts: attempt };
+      if (!response.ok) {
+        // Handle specific error codes
+        if (response.status === 404) {
+          throw new Error('Resource not found');
+        }
+        if (response.status === 401) {
+          throw new Error('Unauthorized - please login again');
+        }
+        if (response.status === 503) {
+          throw new Error('Service temporarily unavailable');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-    } catch (error) {
-      console.log(`Attempt ${attempt} failed:`, error.message);
       
-      if (attempt < maxRetries) {
-        console.log(`Waiting ${retryDelay / 1000}s before retry...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      const data = await response.json();
+      
+      // ✅ Cache successful GET responses
+      if ((options.method === 'GET' || !options.method) && cacheKey) {
+        cache.set(cacheKey, {
+          data,
+          timestamp: Date.now()
+        });
       }
+      
+      return data;
+      
+    } catch (error) {
+      // ✅ Retry on network errors
+      if (retryCount < MAX_RETRIES && 
+          (error.name === 'AbortError' || error.message.includes('fetch'))) {
+        console.warn(`⚠️ Retry ${retryCount + 1}/${MAX_RETRIES}:`, error.message);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+        return fetchWithRetry(retryCount + 1);
+      }
+      
+      throw error;
     }
+  };
+  
+  // ✅ Store pending request promise
+  const requestPromise = fetchWithRetry();
+  if (cacheKey && (options.method === 'GET' || !options.method)) {
+    pendingRequests.set(cacheKey, requestPromise);
+    requestPromise.finally(() => pendingRequests.delete(cacheKey));
   }
   
-  console.error('❌ Failed to wake up backend after', maxRetries, 'attempts');
-  return { 
-    success: false, 
-    error: 'Backend did not respond',
-    message: 'Backend server is taking too long to start. Please try again in a minute.'
+  return requestPromise;
+}
+
+/**
+ * Clear cache (call after mutations)
+ */
+export function clearCache(pattern) {
+  if (pattern) {
+    for (const key of cache.keys()) {
+      if (key.includes(pattern)) {
+        cache.delete(key);
+      }
+    }
+  } else {
+    cache.clear();
+  }
+}
+
+/**
+ * Prefetch data (for predictive loading)
+ */
+export function prefetch(url, cacheKey) {
+  return enhancedFetch(url, { method: 'GET' }, cacheKey).catch(() => {
+    // Silently fail prefetch
+  });
+}
+
+// ============================================
+// API METHODS
+// ============================================
+
+/**
+ * Health check with wake-up logic
+ */
+export async function checkBackendHealth() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000) // 10s timeout for health check
+    });
+    return response.ok;
+  } catch (error) {
+    console.warn('Backend health check failed:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Keep backend alive (ping every 14 min)
+ */
+let keepAliveInterval = null;
+export function startKeepAlive() {
+  if (keepAliveInterval) return;
+  
+  const ping = async () => {
+    try {
+      await checkBackendHealth();
+      console.log('🏓 Backend pinged');
+    } catch (err) {
+      console.warn('⚠️ Ping failed:', err.message);
+    }
   };
-};
+  
+  ping(); // Immediate ping
+  keepAliveInterval = setInterval(ping, 14 * 60 * 1000); // Every 14 minutes
+}
 
-// Helper function to generate PDF
-export const generateInvoicePDF = async (invoiceId) => {
-  try {
-    const response = await fetch(API_ENDPOINTS.INVOICE_PDF, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ invoiceId }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'PDF generation failed');
-    }
-
-    const blob = await response.blob();
-    return { success: true, blob };
-  } catch (error) {
-    console.error('PDF generation error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to generate PDF. Make sure backend server is running.'
-    };
+export function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
   }
-};
+}
 
-// Helper function to download blob as file
-export const downloadBlob = (blob, filename) => {
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
-};
+// ============================================
+// INVOICES
+// ============================================
 
-// Helper function to create user
-export const createUser = async (userData) => {
-  try {
-    const response = await fetch(API_ENDPOINTS.CREATE_USER, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
+export async function getInvoices() {
+  return enhancedFetch('/api/invoices', { method: 'GET' }, 'invoices:all');
+}
 
-    const data = await response.json();
+export async function getInvoice(id) {
+  return enhancedFetch(`/api/invoices/${id}`, { method: 'GET' }, `invoice:${id}`);
+}
 
-    if (!response.ok) {
-      throw new Error(data.message || data.error || 'User creation failed');
-    }
+export async function createInvoice(data) {
+  const result = await enhancedFetch('/api/invoices', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  clearCache('invoices'); // Invalidate cache
+  return result;
+}
 
-    return { success: true, data };
-  } catch (error) {
-    console.error('User creation error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to create user. Make sure backend server is running.'
-    };
-  }
-};
+export async function updateInvoice(id, data) {
+  const result = await enhancedFetch(`/api/invoices/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  clearCache('invoices');
+  clearCache(`invoice:${id}`);
+  return result;
+}
 
-// ==========================================
-// CRM API FUNCTIONS
-// ==========================================
+export async function deleteInvoice(id) {
+  const result = await enhancedFetch(`/api/invoices/${id}`, {
+    method: 'DELETE'
+  });
+  clearCache('invoices');
+  clearCache(`invoice:${id}`);
+  return result;
+}
 
-// Get CRM customer report
-export const getCustomerReport = async () => {
-  try {
-    console.log('📊 Fetching customer report...');
-    
-    const response = await fetch(API_ENDPOINTS.CRM_REPORT, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch customer report');
-    }
-    
-    const data = await response.json();
-    console.log('✅ Customer report fetched');
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Customer report error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to fetch customer report'
-    };
-  }
-};
+// ============================================
+// CUSTOMERS
+// ============================================
 
-// Export customers to CSV
-export const exportCustomersCSV = async () => {
-  try {
-    console.log('📥 Exporting customers to CSV...');
-    
-    const response = await fetch(API_ENDPOINTS.CRM_EXPORT);
-    
-    if (!response.ok) {
-      throw new Error('Failed to export customers');
-    }
-    
-    const blob = await response.blob();
-    console.log('✅ Customers exported');
-    return { success: true, blob };
-  } catch (error) {
-    console.error('❌ Export error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to export customers'
-    };
-  }
-};
+export async function getCustomers() {
+  return enhancedFetch('/api/customers', { method: 'GET' }, 'customers:all');
+}
 
-// Get CRM analytics
-export const getCRMAnalytics = async () => {
-  try {
-    console.log('📈 Fetching CRM analytics...');
-    
-    const response = await fetch(API_ENDPOINTS.CRM_ANALYTICS, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch analytics');
-    }
-    
-    const data = await response.json();
-    console.log('✅ Analytics fetched');
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Analytics error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to fetch analytics'
-    };
-  }
-};
+export async function getCustomer(id) {
+  return enhancedFetch(`/api/customers/${id}`, { method: 'GET' }, `customer:${id}`);
+}
 
-// ==========================================
-// INVENTORY API FUNCTIONS
-// ==========================================
+export async function createCustomer(data) {
+  const result = await enhancedFetch('/api/customers', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  clearCache('customers');
+  return result;
+}
 
-// Get inventory report
-export const getInventoryReport = async () => {
-  try {
-    console.log('📊 Fetching inventory report...');
-    
-    const response = await fetch(API_ENDPOINTS.INVENTORY_REPORT, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch inventory report');
-    }
-    
-    const data = await response.json();
-    console.log('✅ Inventory report fetched');
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Inventory report error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to fetch inventory report'
-    };
-  }
-};
+export async function updateCustomer(id, data) {
+  const result = await enhancedFetch(`/api/customers/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  clearCache('customers');
+  clearCache(`customer:${id}`);
+  return result;
+}
 
-// Export inventory to CSV
-export const exportInventoryCSV = async () => {
-  try {
-    console.log('📥 Exporting inventory to CSV...');
-    
-    const response = await fetch(API_ENDPOINTS.INVENTORY_EXPORT);
-    
-    if (!response.ok) {
-      throw new Error('Failed to export inventory');
-    }
-    
-    const blob = await response.blob();
-    console.log('✅ Inventory exported');
-    return { success: true, blob };
-  } catch (error) {
-    console.error('❌ Export error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to export inventory'
-    };
-  }
-};
+// ============================================
+// PRODUCTS
+// ============================================
 
-// Get inventory analytics
-export const getInventoryAnalytics = async () => {
-  try {
-    console.log('📈 Fetching inventory analytics...');
-    
-    const response = await fetch(API_ENDPOINTS.INVENTORY_ANALYTICS, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch analytics');
-    }
-    
-    const data = await response.json();
-    console.log('✅ Inventory analytics fetched');
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Analytics error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to fetch analytics'
-    };
-  }
-};
+export async function getProducts() {
+  return enhancedFetch('/api/products', { method: 'GET' }, 'products:all');
+}
 
-// Get low stock alerts
-export const getLowStockAlerts = async () => {
-  try {
-    console.log('⚠️ Fetching low stock alerts...');
-    
-    const response = await fetch(API_ENDPOINTS.INVENTORY_LOW_STOCK, {
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
-      }
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch low stock alerts');
-    }
-    
-    const data = await response.json();
-    console.log('✅ Low stock alerts fetched');
-    return { success: true, data };
-  } catch (error) {
-    console.error('❌ Low stock alerts error:', error);
-    return { 
-      success: false, 
-      error: error.message,
-      message: 'Failed to fetch low stock alerts'
-    };
-  }
-};
+export async function getProduct(id) {
+  return enhancedFetch(`/api/products/${id}`, { method: 'GET' }, `product:${id}`);
+}
 
+export async function createProduct(data) {
+  const result = await enhancedFetch('/api/products', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  clearCache('products');
+  return result;
+}
 
-const api = {
-  API_BASE_URL,
-  API_ENDPOINTS,
+export async function updateProduct(id, data) {
+  const result = await enhancedFetch(`/api/products/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  clearCache('products');
+  clearCache(`product:${id}`);
+  return result;
+}
+
+// ============================================
+// INVENTORY
+// ============================================
+
+export async function getInventory() {
+  return enhancedFetch('/api/inventory', { method: 'GET' }, 'inventory:all');
+}
+
+export async function updateInventory(id, data) {
+  const result = await enhancedFetch(`/api/inventory/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  clearCache('inventory');
+  return result;
+}
+
+export async function getInventoryReport() {
+  return enhancedFetch('/api/inventory/report', { method: 'GET' }, 'inventory:report');
+}
+
+// ============================================
+// ANALYTICS
+// ============================================
+
+export async function getAnalytics(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  const cacheKey = `analytics:${queryString}`;
+  return enhancedFetch(`/api/analytics?${queryString}`, { method: 'GET' }, cacheKey);
+}
+
+// ============================================
+// UTILITY
+// ============================================
+
+/**
+ * Batch fetch multiple resources
+ */
+export async function batchFetch(requests) {
+  return Promise.allSettled(
+    requests.map(({ url, cacheKey }) => 
+      enhancedFetch(url, { method: 'GET' }, cacheKey)
+    )
+  );
+}
+
+/**
+ * Prefetch common data on app load
+ */
+export function prefetchCommonData() {
+  // Prefetch frequently accessed data
+  prefetch('/api/products', 'products:all');
+  prefetch('/api/customers', 'customers:all');
+}
+
+// ============================================
+// EXPORTS
+// ============================================
+
+export default {
+  // Health
   checkBackendHealth,
-  wakeUpBackend,
-  generateInvoicePDF,
-  downloadBlob,
-  createUser,
-  getCustomerReport,
-  exportCustomersCSV,
-  getCRMAnalytics,
+  startKeepAlive,
+  stopKeepAlive,
+  
+  // Invoices
+  getInvoices,
+  getInvoice,
+  createInvoice,
+  updateInvoice,
+  deleteInvoice,
+  
+  // Customers
+  getCustomers,
+  getCustomer,
+  createCustomer,
+  updateCustomer,
+  
+  // Products
+  getProducts,
+  getProduct,
+  createProduct,
+  updateProduct,
+  
+  // Inventory
+  getInventory,
+  updateInventory,
   getInventoryReport,
-  exportInventoryCSV,
-  getInventoryAnalytics,
-  getLowStockAlerts,
+  
+  // Analytics
+  getAnalytics,
+  
+  // Utility
+  clearCache,
+  prefetch,
+  batchFetch,
+  prefetchCommonData
 };
-export default api;
