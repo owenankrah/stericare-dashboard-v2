@@ -309,6 +309,17 @@ export async function getInventoryAnalytics() {
 export async function getLowStockAlerts() {
   return apiFetch('/api/inventory/low-stock');
 }
+
+export async function getStockMovements() {
+  return apiFetch('/api/inventory/movements');
+}
+
+export async function adjustStock(id, quantity, reason) {
+  return apiFetch(`/api/inventory/${id}/adjust`, {
+    method: 'POST',
+    body: JSON.stringify({ quantity, reason })
+  });
+}
 // ============================================
 // ANALYTICS
 // ============================================
