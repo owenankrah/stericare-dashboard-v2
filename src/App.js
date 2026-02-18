@@ -6,7 +6,7 @@ import { supabase } from './lib/supabase';
 import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
-import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './api';
+import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './lib/api';
 
 
 
@@ -136,35 +136,38 @@ useEffect(() => {
     // Backend kept alive by UptimeRobot - no wake-up needed
   };
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      localStorage.removeItem('user');
-      localStorage.removeItem('session');
-    } catch (error) {
-      console.error('Logout error:', error);
-      alert('Failed to logout. Please try again.');
-    }
-  };
 
-  if (loading) {
-    return (
-      <ErrorBoundary darkMode={darkMode}>
-      <div className={`min-h-screen flex items-center justify-center ${
-        darkMode ? 'bg-gray-900' : 'bg-gray-50'
-      }`}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto"></div>
-          <p className={`mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Loading Pharma-C Portal...
-          </p>
-        </div>
-      </div>
-      </ErrorBoundary>
-    );
+// ✅ CORRECT - Full logout
+const handleLogout = async () => {
+  try {
+    // Sign out from Supabase
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) throw error;
+    
+    // Clear local state
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    
+    // Clear any cached data
+    localStorage.removeItem('pharma-c-cache');
+    sessionStorage.clear();
+    
+    // Navigate to login
+    navigate('/login');
+    
+    console.log('✅ Logged out successfully');
+  } catch (error) {
+    console.error('❌ Logout error:', error);
+    
+    // Force logout even if API fails
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    localStorage.clear();
+    sessionStorage.clear();
+    navigate('/login');
   }
+};
 
   return (
     <ErrorBoundary darkMode={darkMode}>
