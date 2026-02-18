@@ -1,5 +1,5 @@
-// src/lib/api.js - OPTIMIZED VERSION - CORRECTED
-// Performance improvements: caching, retry logic, error handling
+// src/lib/api.js - COMPLETE OPTIMIZED VERSION
+// All possible exports included to prevent build errors
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -7,7 +7,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// ✅ Request deduplication (prevent multiple identical requests)
+// ✅ Request deduplication
 const pendingRequests = new Map();
 
 // ✅ Retry configuration
@@ -20,7 +20,7 @@ const RETRY_DELAY = 1000;
 async function enhancedFetch(url, options = {}, cacheKey = null) {
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
   
-  // ✅ Check cache for GET requests
+  // Check cache for GET requests
   if (options.method === 'GET' || !options.method) {
     if (cacheKey && cache.has(cacheKey)) {
       const cached = cache.get(cacheKey);
@@ -31,18 +31,18 @@ async function enhancedFetch(url, options = {}, cacheKey = null) {
       cache.delete(cacheKey);
     }
     
-    // ✅ Deduplicate identical pending requests
+    // Deduplicate identical pending requests
     if (cacheKey && pendingRequests.has(cacheKey)) {
       console.log('⏳ Waiting for pending request:', cacheKey);
       return pendingRequests.get(cacheKey);
     }
   }
   
-  // ✅ Fetch with retry logic
+  // Fetch with retry logic
   const fetchWithRetry = async (retryCount = 0) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const response = await fetch(fullUrl, {
         ...options,
@@ -56,33 +56,23 @@ async function enhancedFetch(url, options = {}, cacheKey = null) {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        // Handle specific error codes
-        if (response.status === 404) {
-          throw new Error('Resource not found');
-        }
-        if (response.status === 401) {
-          throw new Error('Unauthorized - please login again');
-        }
-        if (response.status === 503) {
-          throw new Error('Service temporarily unavailable');
-        }
+        if (response.status === 404) throw new Error('Resource not found');
+        if (response.status === 401) throw new Error('Unauthorized - please login again');
+        if (response.status === 503) throw new Error('Service temporarily unavailable');
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
       
-      // ✅ Cache successful GET responses
+      // Cache successful GET responses
       if ((options.method === 'GET' || !options.method) && cacheKey) {
-        cache.set(cacheKey, {
-          data,
-          timestamp: Date.now()
-        });
+        cache.set(cacheKey, { data, timestamp: Date.now() });
       }
       
       return data;
       
     } catch (error) {
-      // ✅ Retry on network errors
+      // Retry on network errors
       if (retryCount < MAX_RETRIES && 
           (error.name === 'AbortError' || error.message.includes('fetch'))) {
         console.warn(`⚠️ Retry ${retryCount + 1}/${MAX_RETRIES}:`, error.message);
@@ -94,7 +84,7 @@ async function enhancedFetch(url, options = {}, cacheKey = null) {
     }
   };
   
-  // ✅ Store pending request promise
+  // Store pending request promise
   const requestPromise = fetchWithRetry();
   if (cacheKey && (options.method === 'GET' || !options.method)) {
     pendingRequests.set(cacheKey, requestPromise);
@@ -105,14 +95,12 @@ async function enhancedFetch(url, options = {}, cacheKey = null) {
 }
 
 /**
- * Clear cache (call after mutations)
+ * Clear cache
  */
 export function clearCache(pattern) {
   if (pattern) {
     for (const key of cache.keys()) {
-      if (key.includes(pattern)) {
-        cache.delete(key);
-      }
+      if (key.includes(pattern)) cache.delete(key);
     }
   } else {
     cache.clear();
@@ -120,26 +108,21 @@ export function clearCache(pattern) {
 }
 
 /**
- * Prefetch data (for predictive loading)
+ * Prefetch data
  */
 export function prefetch(url, cacheKey) {
-  return enhancedFetch(url, { method: 'GET' }, cacheKey).catch(() => {
-    // Silently fail prefetch
-  });
+  return enhancedFetch(url, { method: 'GET' }, cacheKey).catch(() => {});
 }
 
 // ============================================
-// API METHODS
+// HEALTH & KEEP-ALIVE
 // ============================================
 
-/**
- * Health check with wake-up logic
- */
 export async function checkBackendHealth() {
   try {
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(10000) // 10s timeout for health check
+      signal: AbortSignal.timeout(10000)
     });
     return response.ok;
   } catch (error) {
@@ -148,10 +131,8 @@ export async function checkBackendHealth() {
   }
 }
 
-/**
- * Keep backend alive (ping every 14 min)
- */
 let keepAliveInterval = null;
+
 export function startKeepAlive() {
   if (keepAliveInterval) return;
   
@@ -164,8 +145,8 @@ export function startKeepAlive() {
     }
   };
   
-  ping(); // Immediate ping
-  keepAliveInterval = setInterval(ping, 14 * 60 * 1000); // Every 14 minutes
+  ping();
+  keepAliveInterval = setInterval(ping, 14 * 60 * 1000);
 }
 
 export function stopKeepAlive() {
@@ -246,6 +227,15 @@ export async function updateCustomer(id, data) {
   return result;
 }
 
+export async function deleteCustomer(id) {
+  const result = await enhancedFetch(`/api/customers/${id}`, {
+    method: 'DELETE'
+  });
+  clearCache('customers');
+  clearCache(`customer:${id}`);
+  return result;
+}
+
 // ============================================
 // PRODUCTS
 // ============================================
@@ -287,11 +277,15 @@ export async function deleteProduct(id) {
 }
 
 // ============================================
-// INVENTORY - ✅ ALL FIXED TO USE enhancedFetch
+// INVENTORY - COMPLETE
 // ============================================
 
 export async function getInventory() {
   return enhancedFetch('/api/inventory', { method: 'GET' }, 'inventory:all');
+}
+
+export async function getInventoryItem(id) {
+  return enhancedFetch(`/api/inventory/${id}`, { method: 'GET' }, `inventory:${id}`);
 }
 
 export async function updateInventory(id, data) {
@@ -315,8 +309,9 @@ export async function getLowStockAlerts() {
   return enhancedFetch('/api/inventory/low-stock', { method: 'GET' }, 'inventory:low-stock');
 }
 
-export async function getStockMovements() {
-  return enhancedFetch('/api/inventory/movements', { method: 'GET' }, 'inventory:movements');
+export async function getStockMovements(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  return enhancedFetch(`/api/inventory/movements?${queryString}`, { method: 'GET' }, 'inventory:movements');
 }
 
 export async function adjustStock(id, quantity, reason) {
@@ -326,6 +321,68 @@ export async function adjustStock(id, quantity, reason) {
   });
   clearCache('inventory');
   return result;
+}
+
+// ✅ ADDED: CSV Export function
+export async function exportInventoryCSV() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/inventory/export/csv`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'text/csv'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('CSV export error:', error);
+    throw error;
+  }
+}
+
+// ✅ ADDED: PDF Export function
+export async function exportInventoryPDF() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/inventory/export/pdf`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/pdf'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inventory_${new Date().toISOString().split('T')[0]}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('PDF export error:', error);
+    throw error;
+  }
 }
 
 // ============================================
@@ -338,13 +395,66 @@ export async function getAnalytics(params = {}) {
   return enhancedFetch(`/api/analytics?${queryString}`, { method: 'GET' }, cacheKey);
 }
 
+export async function getSalesAnalytics(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  return enhancedFetch(`/api/analytics/sales?${queryString}`, { method: 'GET' }, `analytics:sales:${queryString}`);
+}
+
+export async function getRevenueTrends(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  return enhancedFetch(`/api/analytics/revenue?${queryString}`, { method: 'GET' }, `analytics:revenue:${queryString}`);
+}
+
+export async function getDashboardStats() {
+  return enhancedFetch('/api/analytics/dashboard', { method: 'GET' }, 'analytics:dashboard');
+}
+
+// ============================================
+// SALES
+// ============================================
+
+export async function getSales(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  return enhancedFetch(`/api/sales?${queryString}`, { method: 'GET' }, `sales:${queryString}`);
+}
+
+export async function getSale(id) {
+  return enhancedFetch(`/api/sales/${id}`, { method: 'GET' }, `sale:${id}`);
+}
+
+export async function createSale(data) {
+  const result = await enhancedFetch('/api/sales', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  clearCache('sales');
+  clearCache('analytics');
+  return result;
+}
+
+export async function updateSale(id, data) {
+  const result = await enhancedFetch(`/api/sales/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  clearCache('sales');
+  clearCache(`sale:${id}`);
+  return result;
+}
+
+export async function deleteSale(id) {
+  const result = await enhancedFetch(`/api/sales/${id}`, {
+    method: 'DELETE'
+  });
+  clearCache('sales');
+  clearCache(`sale:${id}`);
+  return result;
+}
+
 // ============================================
 // UTILITY
 // ============================================
 
-/**
- * Batch fetch multiple resources
- */
 export async function batchFetch(requests) {
   return Promise.allSettled(
     requests.map(({ url, cacheKey }) => 
@@ -353,17 +463,13 @@ export async function batchFetch(requests) {
   );
 }
 
-/**
- * Prefetch common data on app load
- */
 export function prefetchCommonData() {
-  // Prefetch frequently accessed data
   prefetch('/api/products', 'products:all');
   prefetch('/api/customers', 'customers:all');
 }
 
 // ============================================
-// DEFAULT EXPORT
+// DEFAULT EXPORT - COMPLETE
 // ============================================
 
 export default {
@@ -384,6 +490,7 @@ export default {
   getCustomer,
   createCustomer,
   updateCustomer,
+  deleteCustomer,
   
   // Products
   getProducts,
@@ -394,15 +501,28 @@ export default {
   
   // Inventory
   getInventory,
+  getInventoryItem,
   updateInventory,
   getInventoryReport,
   getInventoryAnalytics,
   getLowStockAlerts,
   getStockMovements,
   adjustStock,
+  exportInventoryCSV,
+  exportInventoryPDF,
   
   // Analytics
   getAnalytics,
+  getSalesAnalytics,
+  getRevenueTrends,
+  getDashboardStats,
+  
+  // Sales
+  getSales,
+  getSale,
+  createSale,
+  updateSale,
+  deleteSale,
   
   // Utility
   clearCache,
