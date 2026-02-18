@@ -281,6 +281,8 @@ export async function updateProduct(id, data) {
 // INVENTORY
 // ============================================
 
+
+
 export async function getInventory() {
   return enhancedFetch('/api/inventory', { method: 'GET' }, 'inventory:all');
 }
@@ -298,6 +300,11 @@ export async function getInventoryReport() {
   return enhancedFetch('/api/inventory/report', { method: 'GET' }, 'inventory:report');
 }
 
+
+// Add this export
+export async function getInventoryAnalytics() {
+  return apiFetch('/api/inventory/analytics');
+}
 // ============================================
 // ANALYTICS
 // ============================================
