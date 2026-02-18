@@ -305,6 +305,10 @@ export async function getInventoryReport() {
 export async function getInventoryAnalytics() {
   return apiFetch('/api/inventory/analytics');
 }
+
+export async function getLowStockAlerts() {
+  return apiFetch('/api/inventory/low-stock');
+}
 // ============================================
 // ANALYTICS
 // ============================================
