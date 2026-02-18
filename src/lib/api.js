@@ -1,4 +1,4 @@
-// src/api.js - OPTIMIZED VERSION
+// src/lib/api.js - OPTIMIZED VERSION - CORRECTED
 // Performance improvements: caching, retry logic, error handling
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -192,7 +192,7 @@ export async function createInvoice(data) {
     method: 'POST',
     body: JSON.stringify(data)
   });
-  clearCache('invoices'); // Invalidate cache
+  clearCache('invoices');
   return result;
 }
 
@@ -277,11 +277,18 @@ export async function updateProduct(id, data) {
   return result;
 }
 
-// ============================================
-// INVENTORY
-// ============================================
+export async function deleteProduct(id) {
+  const result = await enhancedFetch(`/api/products/${id}`, {
+    method: 'DELETE'
+  });
+  clearCache('products');
+  clearCache(`product:${id}`);
+  return result;
+}
 
-
+// ============================================
+// INVENTORY - ✅ ALL FIXED TO USE enhancedFetch
+// ============================================
 
 export async function getInventory() {
   return enhancedFetch('/api/inventory', { method: 'GET' }, 'inventory:all');
@@ -300,26 +307,27 @@ export async function getInventoryReport() {
   return enhancedFetch('/api/inventory/report', { method: 'GET' }, 'inventory:report');
 }
 
-
-// Add this export
 export async function getInventoryAnalytics() {
-  return apiFetch('/api/inventory/analytics');
+  return enhancedFetch('/api/inventory/analytics', { method: 'GET' }, 'inventory:analytics');
 }
 
 export async function getLowStockAlerts() {
-  return apiFetch('/api/inventory/low-stock');
+  return enhancedFetch('/api/inventory/low-stock', { method: 'GET' }, 'inventory:low-stock');
 }
 
 export async function getStockMovements() {
-  return apiFetch('/api/inventory/movements');
+  return enhancedFetch('/api/inventory/movements', { method: 'GET' }, 'inventory:movements');
 }
 
 export async function adjustStock(id, quantity, reason) {
-  return apiFetch(`/api/inventory/${id}/adjust`, {
+  const result = await enhancedFetch(`/api/inventory/${id}/adjust`, {
     method: 'POST',
     body: JSON.stringify({ quantity, reason })
   });
+  clearCache('inventory');
+  return result;
 }
+
 // ============================================
 // ANALYTICS
 // ============================================
@@ -355,7 +363,7 @@ export function prefetchCommonData() {
 }
 
 // ============================================
-// EXPORTS
+// DEFAULT EXPORT
 // ============================================
 
 export default {
@@ -382,11 +390,16 @@ export default {
   getProduct,
   createProduct,
   updateProduct,
+  deleteProduct,
   
   // Inventory
   getInventory,
   updateInventory,
   getInventoryReport,
+  getInventoryAnalytics,
+  getLowStockAlerts,
+  getStockMovements,
+  adjustStock,
   
   // Analytics
   getAnalytics,
