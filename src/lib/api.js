@@ -1,5 +1,5 @@
-// src/lib/api.js - COMPLETE OPTIMIZED VERSION
-// All possible exports included to prevent build errors
+// src/lib/api.js - COMPLETE VERSION WITH ALL EXPORTS
+// Performance improvements: caching, retry logic, error handling
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -112,6 +112,57 @@ export function clearCache(pattern) {
  */
 export function prefetch(url, cacheKey) {
   return enhancedFetch(url, { method: 'GET' }, cacheKey).catch(() => {});
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
+
+/**
+ * Download blob helper - for file downloads
+ */
+export function downloadBlob(blob, filename) {
+  try {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    return { success: true };
+  } catch (error) {
+    console.error('Download error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Format currency
+ */
+export function formatCurrency(amount, currency = 'GHS') {
+  return new Intl.NumberFormat('en-GH', {
+    style: 'currency',
+    currency: currency
+  }).format(amount);
+}
+
+/**
+ * Format date
+ */
+export function formatDate(date, format = 'short') {
+  const d = new Date(date);
+  if (format === 'short') {
+    return d.toLocaleDateString('en-GH');
+  } else if (format === 'long') {
+    return d.toLocaleDateString('en-GH', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }
+  return d.toISOString();
 }
 
 // ============================================
@@ -323,14 +374,10 @@ export async function adjustStock(id, quantity, reason) {
   return result;
 }
 
-// ✅ ADDED: CSV Export function
 export async function exportInventoryCSV() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/inventory/export/csv`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'text/csv'
-      }
+      method: 'GET'
     });
     
     if (!response.ok) {
@@ -338,30 +385,18 @@ export async function exportInventoryCSV() {
     }
     
     const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    
-    return { success: true };
+    const filename = `inventory_${new Date().toISOString().split('T')[0]}.csv`;
+    return downloadBlob(blob, filename);
   } catch (error) {
     console.error('CSV export error:', error);
     throw error;
   }
 }
 
-// ✅ ADDED: PDF Export function
 export async function exportInventoryPDF() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/inventory/export/pdf`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/pdf'
-      }
+      method: 'GET'
     });
     
     if (!response.ok) {
@@ -369,16 +404,8 @@ export async function exportInventoryPDF() {
     }
     
     const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory_${new Date().toISOString().split('T')[0]}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-    
-    return { success: true };
+    const filename = `inventory_${new Date().toISOString().split('T')[0]}.pdf`;
+    return downloadBlob(blob, filename);
   } catch (error) {
     console.error('PDF export error:', error);
     throw error;
@@ -452,7 +479,7 @@ export async function deleteSale(id) {
 }
 
 // ============================================
-// UTILITY
+// BATCH & UTILITY
 // ============================================
 
 export async function batchFetch(requests) {
@@ -525,6 +552,9 @@ export default {
   deleteSale,
   
   // Utility
+  downloadBlob,
+  formatCurrency,
+  formatDate,
   clearCache,
   prefetch,
   batchFetch,
