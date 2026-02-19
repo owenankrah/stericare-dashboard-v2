@@ -1,6 +1,8 @@
 // src/lib/api.js - COMPLETE VERSION WITH ALL EXPORTS
 // Performance improvements: caching, retry logic, error handling
 
+import { generateInvoicePDFClient } from "./clientPDF";
+
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // ✅ Request cache (5 min TTL)
@@ -246,6 +248,37 @@ export async function deleteInvoice(id) {
   clearCache(`invoice:${id}`);
   return result;
 }
+
+
+// ============================================
+// INVOICE PDF EXPORT (SERVER-SIDE)
+// ============================================
+
+export async function getInvoicePDF(invoiceId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/invoices/${invoiceId}/pdf`, {
+      method: 'GET'
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const blob = await response.blob();
+    return {
+      success: true,
+      blob
+    };
+
+  } catch (error) {
+    console.error("❌ Error fetching invoice PDF:", error);
+    return {
+      success: false,
+      message: error.message
+    };
+  }
+}
+
 
 // ============================================
 // CUSTOMERS
@@ -506,6 +539,8 @@ export default {
   stopKeepAlive,
   
   // Invoices
+  generateInvoicePDFClient, 
+  getInvoicePDF,
   getInvoices,
   getInvoice,
   createInvoice,
@@ -513,6 +548,7 @@ export default {
   deleteInvoice,
   
   // Customers
+  
   getCustomers,
   getCustomer,
   createCustomer,
