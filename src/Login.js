@@ -138,6 +138,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
                 placeholder="••••••••"
                 required
                 minLength={6}
+                autoComplete="current-password"  // ← Add this
                 className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
                 } focus:ring-2 focus:ring-blue-500 focus:outline-none`}
