@@ -254,7 +254,7 @@ export async function deleteInvoice(id) {
 // INVOICE PDF EXPORT (SERVER-SIDE)
 // ============================================
 
-export async function getInvoicePDF(invoiceId) {
+export async function generateInvoicePDF(invoiceId) {
   try {
     const response = await fetch(`${API_BASE_URL}/api/invoices/${invoiceId}/pdf`, {
       method: 'GET'
@@ -540,7 +540,7 @@ export default {
   
   // Invoices
   generateInvoicePDFClient, 
-  getInvoicePDF,
+  generateInvoicePDF,
   getInvoices,
   getInvoice,
   createInvoice,
