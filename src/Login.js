@@ -25,47 +25,48 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
   const location = useLocation();
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
-    setIsLoading(true);
-    setLoadingMessage('Signing in...');
+  e.preventDefault();
+  setError('');
+  setIsLoading(true);
+  setLoadingMessage('Signing in...');
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setLoadingMessage('Loading profile...');
+    setLoadingMessage('Loading profile...');
 
-      // Get user profile
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
+    // Get user profile
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
 
-      // Call parent onLogin handler
-      onLogin({
-        ...data.user,
-        profile: profile || { full_name: data.user.email.split('@')[0], role: 'sales_rep' }
-      });
+    // ✅ WAIT for onLogin to complete
+    await onLogin({
+      ...data.user,
+      profile: profile || { full_name: data.user.email.split('@')[0], role: 'sales_rep' }
+    });
 
-      // Redirect after successful login
-      // If user was trying to access a specific page, redirect there
-      // Otherwise, redirect to home (app selector)
-      const from = location.state?.from?.pathname || '/';
-      navigate(from, { replace: true });
+    // ✅ Add a small delay to ensure state propagates
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    } catch (error) {
-      setError(error.message || 'Login failed');
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
-  };
+    // NOW redirect
+    const from = location.state?.from?.pathname || '/';
+    navigate(from, { replace: true });
+
+  } catch (error) {
+    setError(error.message || 'Login failed');
+  } finally {
+    setIsLoading(false);
+    setLoadingMessage('');
+  }
+};
 
   // Show Forgot Password screen
   if (showForgotPassword) {

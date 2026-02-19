@@ -129,12 +129,16 @@ useEffect(() => {
   };
 
   const handleLogin = async (user) => {
-    console.log('✅ User logged in:', user.email);
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-    
-    // Backend kept alive by UptimeRobot - no wake-up needed
-  };
+  console.log('🔐 Login callback received:', user);
+  
+  setIsAuthenticated(true);
+  setCurrentUser(user);
+  
+  console.log('✅ Auth state updated');
+  
+  // Return a promise so Login.js knows when it's done
+  return Promise.resolve();
+};
 
 
 // ✅ CORRECT - Full logout
