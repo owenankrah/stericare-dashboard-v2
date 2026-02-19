@@ -511,6 +511,30 @@ export async function deleteSale(id) {
   return result;
 }
 
+
+// ============================================
+// USERS (ADMIN)
+// ============================================
+
+export async function createUser(data) {
+  try {
+    const result = await enhancedFetch('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+
+    // If you add a users list endpoint in the future, this will refresh it
+    clearCache('users');
+
+    return result;
+
+  } catch (error) {
+    console.error("❌ createUser error:", error);
+    throw error;
+  }
+}
+
+
 // ============================================
 // BATCH & UTILITY
 // ============================================
