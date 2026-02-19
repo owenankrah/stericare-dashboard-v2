@@ -281,83 +281,169 @@ export async function generateInvoicePDF(invoiceId) {
 
 
 // ============================================
-// CUSTOMERS
-// ============================================
-
-export async function getCustomers() {
-  return enhancedFetch('/api/customers', { method: 'GET' }, 'customers:all');
-}
-
-export async function getCustomer(id) {
-  return enhancedFetch(`/api/customers/${id}`, { method: 'GET' }, `customer:${id}`);
-}
-
-export async function createCustomer(data) {
-  const result = await enhancedFetch('/api/customers', {
-    method: 'POST',
-    body: JSON.stringify(data)
-  });
-  clearCache('customers');
-  return result;
-}
-
-export async function updateCustomer(id, data) {
-  const result = await enhancedFetch(`/api/customers/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data)
-  });
-  clearCache('customers');
-  clearCache(`customer:${id}`);
-  return result;
-}
-
-export async function deleteCustomer(id) {
-  const result = await enhancedFetch(`/api/customers/${id}`, {
-    method: 'DELETE'
-  });
-  clearCache('customers');
-  clearCache(`customer:${id}`);
-  return result;
-}
-
-// ============================================
-// PRODUCTS
+// PRODUCTS - Use Supabase directly
 // ============================================
 
 export async function getProducts() {
-  return enhancedFetch('/api/products', { method: 'GET' }, 'products:all');
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('name');
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Get products error:', error);
+    throw error;
+  }
 }
 
 export async function getProduct(id) {
-  return enhancedFetch(`/api/products/${id}`, { method: 'GET' }, `product:${id}`);
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Get product error:', error);
+    throw error;
+  }
 }
 
-export async function createProduct(data) {
-  const result = await enhancedFetch('/api/products', {
-    method: 'POST',
-    body: JSON.stringify(data)
-  });
-  clearCache('products');
-  return result;
+export async function createProduct(productData) {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .insert(productData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Create product error:', error);
+    throw error;
+  }
 }
 
-export async function updateProduct(id, data) {
-  const result = await enhancedFetch(`/api/products/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data)
-  });
-  clearCache('products');
-  clearCache(`product:${id}`);
-  return result;
+export async function updateProduct(id, productData) {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .update(productData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Update product error:', error);
+    throw error;
+  }
 }
 
 export async function deleteProduct(id) {
-  const result = await enhancedFetch(`/api/products/${id}`, {
-    method: 'DELETE'
-  });
-  clearCache('products');
-  clearCache(`product:${id}`);
-  return result;
+  try {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Delete product error:', error);
+    throw error;
+  }
+}
+
+// ============================================
+// CUSTOMERS - Use Supabase directly
+// ============================================
+
+export async function getCustomers() {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('name');
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Get customers error:', error);
+    throw error;
+  }
+}
+
+export async function getCustomer(id) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Get customer error:', error);
+    throw error;
+  }
+}
+
+export async function createCustomer(customerData) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .insert(customerData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Create customer error:', error);
+    throw error;
+  }
+}
+
+export async function updateCustomer(id, customerData) {
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .update(customerData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Update customer error:', error);
+    throw error;
+  }
+}
+
+export async function deleteCustomer(id) {
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    return { success: true };
+  } catch (error) {
+    console.error('Delete customer error:', error);
+    throw error;
+  }
 }
 
 // ============================================
