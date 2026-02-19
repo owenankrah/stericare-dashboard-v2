@@ -2,20 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* OPTIONAL: Move your CSS animations here if you want */
-
-.loading {
-  display: inline-block;
-  width: 50px;
-  height: 50px;
-  border: 3px solid rgba(59, 130, 246, 0.3);
-  border-radius: 50%;
-  border-top-color: #3B82F6;
-  animation: spin 1s ease-in-out infinite;
+@layer base {
+  body {
+    @apply antialiased;
+  }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-pharma-teal text-pharma-blue rounded-lg font-medium hover:bg-pharma-teal/90 transition-colors;
+  }
+  
+  .loading {
+    @apply inline-block w-12 h-12 border-4 border-pharma-blue/30 border-t-pharma-blue rounded-full animate-spin;
   }
 }
