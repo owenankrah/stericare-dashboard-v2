@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import AppSelector from './AppSelector';
 import { supabase } from './lib/supabase';
@@ -7,6 +7,7 @@ import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './lib/api';
+
 
 
 
@@ -44,6 +45,7 @@ const LoadingFallback = ({ darkMode }) => (
 );
 
 function App() {
+   const navigate = useNavigate();   // ✅ REQUIRED FIX
   // State management
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);

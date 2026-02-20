@@ -135,7 +135,7 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const downloadPDF = useCallback(async (invoice) => {
     try {
       // Call API endpoint to generate PDF
-      const response = await fetch('/api/invoices/pdf', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invoices/pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
