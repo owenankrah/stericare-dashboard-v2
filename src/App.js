@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './Login';
 import AppSelector from './AppSelector';
 import { supabase } from './lib/supabase';
@@ -7,10 +7,6 @@ import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './lib/api';
-
-
-
-
 
 // ==========================================
 // LAZY LOADING - Load modules only when needed
@@ -45,7 +41,8 @@ const LoadingFallback = ({ darkMode }) => (
 );
 
 function App() {
-   const navigate = useNavigate();   // ✅ REQUIRED FIX
+  const navigate = useNavigate(); // ✅ Now works because BrowserRouter is in index.js
+  
   // State management
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -58,13 +55,12 @@ function App() {
   });
   const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  startKeepAlive();
-  prefetchCommonData();
-  return () => stopKeepAlive();
-}, []);
-
-
+  // Keep backend alive and prefetch common data
+  useEffect(() => {
+    startKeepAlive();
+    prefetchCommonData();
+    return () => stopKeepAlive();
+  }, []);
 
   // Check URL for password reset
   useEffect(() => {
@@ -89,6 +85,8 @@ useEffect(() => {
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔔 Auth event:', event);
+        
         if (event === 'SIGNED_IN' && session) {
           const { data: profile } = await supabase
             .from('user_profiles')
@@ -98,10 +96,11 @@ useEffect(() => {
             
           setCurrentUser({ ...session.user, profile });
           setIsAuthenticated(true);
-        
+          console.log('✅ User authenticated:', session.user.email);
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setCurrentUser(null);
+          console.log('✅ User signed out');
         }
       }
     );
@@ -111,9 +110,11 @@ useEffect(() => {
 
   const checkSession = async () => {
     try {
+      console.log('🔍 Checking for existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
+        console.log('✅ Found session:', session.user.email);
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('*')
@@ -122,6 +123,8 @@ useEffect(() => {
           
         setCurrentUser({ ...session.user, profile });
         setIsAuthenticated(true);
+      } else {
+        console.log('❌ No session found');
       }
     } catch (error) {
       console.error('Session error:', error);
@@ -131,53 +134,57 @@ useEffect(() => {
   };
 
   const handleLogin = async (user) => {
-  console.log('🔐 Login callback received:', user);
-  
-  setIsAuthenticated(true);
-  setCurrentUser(user);
-  
-  console.log('✅ Auth state updated');
-  
-  // Return a promise so Login.js knows when it's done
-  return Promise.resolve();
-};
+    console.log('🔐 Login callback received:', user.email);
+    
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    
+    console.log('✅ Auth state updated');
+    
+    // Return promise so Login.js can await
+    return Promise.resolve();
+  };
 
+  const handleLogout = async () => {
+    console.log('🚪 Logout initiated...');
+    
+    try {
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) throw error;
+      
+      // Clear local state
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      
+      // Clear any cached data
+      localStorage.removeItem('pharma-c-cache');
+      sessionStorage.clear();
+      
+      // Navigate to login
+      navigate('/login');
+      
+      console.log('✅ Logged out successfully');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      
+      // Force logout even if API fails
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/login');
+    }
+  };
 
-// ✅ CORRECT - Full logout
-const handleLogout = async () => {
-  try {
-    // Sign out from Supabase
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) throw error;
-    
-    // Clear local state
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    
-    // Clear any cached data
-    localStorage.removeItem('pharma-c-cache');
-    sessionStorage.clear();
-    
-    // Navigate to login
-    navigate('/login');
-    
-    console.log('✅ Logged out successfully');
-  } catch (error) {
-    console.error('❌ Logout error:', error);
-    
-    // Force logout even if API fails
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.clear();
-    sessionStorage.clear();
-    navigate('/login');
+  // Show loading screen while checking session
+  if (loading) {
+    return <LoadingFallback darkMode={darkMode} />;
   }
-};
 
   return (
     <ErrorBoundary darkMode={darkMode}>
-    <BrowserRouter>
       <div className="App">
         <Suspense fallback={<LoadingFallback darkMode={darkMode} />}>
           <Routes>
@@ -331,7 +338,6 @@ const handleLogout = async () => {
           </Routes>
         </Suspense>
       </div>
-    </BrowserRouter>
     </ErrorBoundary>
   );
 }

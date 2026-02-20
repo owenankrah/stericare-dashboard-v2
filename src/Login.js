@@ -9,7 +9,6 @@ import ForgotPassword from './ForgotPassword';
  * Features:
  * - Automatic redirect after successful login
  * - Preserves intended destination (redirect to page user was trying to access)
- * - No backend wake-up (handled by UptimeRobot)
  * - Forgot password integration
  */
 
@@ -25,48 +24,57 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
   const location = useLocation();
 
   const handleLogin = async (e) => {
-  e.preventDefault();
-  setError('');
-  setIsLoading(true);
-  setLoadingMessage('Signing in...');
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    setLoadingMessage('Signing in...');
 
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    setLoadingMessage('Loading profile...');
+      setLoadingMessage('Loading profile...');
 
-    // Get user profile
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
+      // Get user profile
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
 
-    // ✅ WAIT for onLogin to complete
-    await onLogin({
-      ...data.user,
-      profile: profile || { full_name: data.user.email.split('@')[0], role: 'sales_rep' }
-    });
+      const userData = {
+        ...data.user,
+        profile: profile || { 
+          full_name: data.user.email.split('@')[0], 
+          role: 'sales_rep' 
+        }
+      };
 
-    // ✅ Add a small delay to ensure state propagates
-    await new Promise(resolve => setTimeout(resolve, 100));
+      // Call parent onLogin handler and wait for it
+      await onLogin(userData);
+      
+      console.log('✅ onLogin complete');
 
-    // NOW redirect
-    const from = location.state?.from?.pathname || '/';
-    navigate(from, { replace: true });
+      // Wait for state to propagate
+      await new Promise(resolve => setTimeout(resolve, 150));
 
-  } catch (error) {
-    setError(error.message || 'Login failed');
-  } finally {
-    setIsLoading(false);
-    setLoadingMessage('');
-  }
-};
+      // Redirect after successful login
+      const from = location.state?.from?.pathname || '/';
+      console.log('🚀 Navigating to:', from);
+      navigate(from, { replace: true });
+
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      setError(error.message || 'Login failed');
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  };
 
   // Show Forgot Password screen
   if (showForgotPassword) {
@@ -119,7 +127,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 required
-                autoComplete="username"  // ← Add this
+                autoComplete="username"
                 className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
                 } focus:ring-2 focus:ring-blue-500 focus:outline-none`}
@@ -140,7 +148,7 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
                 placeholder="••••••••"
                 required
                 minLength={6}
-                autoComplete="current-password"  // ← Add this
+                autoComplete="current-password"
                 className={`w-full pl-10 pr-4 py-3 rounded-lg border ${
                   darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'
                 } focus:ring-2 focus:ring-blue-500 focus:outline-none`}
