@@ -146,37 +146,41 @@ function App() {
   };
 
   const handleLogout = async () => {
-    console.log('🚪 Logout initiated...');
+  console.log('🚪 Logout initiated...');
+  
+  try {
+    // Clear local state FIRST
+    setIsAuthenticated(false);
+    setCurrentUser(null);
     
+    // Clear storage
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Then sign out from Supabase (might fail, that's OK)
     try {
-      // Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) throw error;
-      
-      // Clear local state
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      
-      // Clear any cached data
-      localStorage.removeItem('pharma-c-cache');
-      sessionStorage.clear();
-      
-      // Navigate to login
-      navigate('/login');
-      
-      console.log('✅ Logged out successfully');
-    } catch (error) {
-      console.error('❌ Logout error:', error);
-      
-      // Force logout even if API fails
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      localStorage.clear();
-      sessionStorage.clear();
-      navigate('/login');
+      await supabase.auth.signOut();
+      console.log('✅ Supabase signOut complete');
+    } catch (supabaseError) {
+      // Ignore AbortError - we're logging out anyway
+      console.log('⚠️ Supabase signOut error (ignored):', supabaseError.message);
     }
-  };
+    
+    // Navigate to login
+    navigate('/login');
+    console.log('✅ Logged out successfully');
+    
+  } catch (error) {
+    console.error('❌ Logout error:', error);
+    
+    // Force logout even if everything fails
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/login';
+  }
+};
 
   // Show loading screen while checking session
   if (loading) {
