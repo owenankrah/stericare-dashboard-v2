@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { FileText, Download, Eye, Search, Filter, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { FileText, Download, Eye, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { queryCache } from '../lib/queryCache';
 import { useNavigate } from 'react-router-dom';
@@ -9,14 +9,13 @@ import { useNavigate } from 'react-router-dom';
  * Performance improvements:
  * ✅ Query caching (5 min TTL)
  * ✅ useMemo for filtered invoices
- * ✅ useCallback for handlers
  * ✅ Cache invalidation on data changes
  */
-
 
 const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // ✅ ADD THIS
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -129,34 +128,61 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
   }, [invoices, searchTerm, filterType, filterStatus, startDate, endDate]);
   
   // ==========================================
-  // PERFORMANCE: useCallback for stable function references
+  // PDF DOWNLOAD HANDLER
   // ==========================================
   
-  const downloadPDF = useCallback(async (invoice) => {
+  const handleDownloadPDF = async (invoice) => {
     try {
-      // Call API endpoint to generate PDF
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invoices/pdf`, {
+      setIsGeneratingPDF(true);
+      console.log('📄 Generating PDF for invoice:', invoice.invoice_number);
+      
+      // Make sure API_BASE_URL is defined
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://stericare-dashboard-v2-1.onrender.com';
+      
+      console.log('🔗 API URL:', API_BASE_URL);
+      
+      const response = await fetch(`${API_BASE_URL}/api/invoices/pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ invoiceId: invoice.id })
+        body: JSON.stringify({
+          invoiceId: invoice.id
+        })
       });
-      
-      if (!response.ok) throw new Error('PDF generation failed');
-      
+
+      console.log('📡 Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('PDF generation failed:', errorText);
+        throw new Error('PDF generation failed');
+      }
+
+      // Get the PDF blob
       const blob = await response.blob();
+      
+      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${invoice.invoice_number}.pdf`;
+      a.download = `Invoice-${invoice.invoice_number}.pdf`;
+      document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url); // Cleanup
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('✅ PDF downloaded successfully');
+      
     } catch (error) {
       console.error('Error downloading PDF:', error);
       alert('Failed to download PDF. Please try again.');
+    } finally {
+      setIsGeneratingPDF(false);
     }
-  }, []);
+  };
   
   if (loading) {
     return (
@@ -284,7 +310,7 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
                     >
                       {invoice.invoice_number}
                     </span>
-                    </td>
+                  </td>
                   <td className="px-4 py-3 text-sm">{new Date(invoice.invoice_date).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-sm">{invoice.customer_name}</td>
                   <td className="px-4 py-3 text-sm">
@@ -320,8 +346,13 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
                         <Eye size={16} className="text-blue-600" />
                       </button>
                       <button
-                        onClick={() => downloadPDF(invoice)}
-                        className="p-2 hover:bg-green-100 dark:hover:bg-green-900 rounded"
+                        onClick={() => handleDownloadPDF(invoice)} 
+                        disabled={isGeneratingPDF}
+                        className={`p-2 rounded ${
+                          isGeneratingPDF
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:bg-green-100 dark:hover:bg-green-900'
+                        }`}
                         title="Download PDF"
                       >
                         <Download size={16} className="text-green-600" />
