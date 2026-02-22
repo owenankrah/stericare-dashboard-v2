@@ -57,18 +57,18 @@ const Login = ({ onLogin, darkMode, setDarkMode }) => {
       // Call parent onLogin handler and wait for it
       await onLogin(userData);
       
-      console.log('✅ onLogin complete');
+      console.log('[Login] onLogin complete');
 
       // Wait for state to propagate
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // Redirect after successful login
       const from = location.state?.from?.pathname || '/';
-      console.log('🚀 Navigating to:', from);
+      console.log('[Login] Navigating to:', from);
       navigate(from, { replace: true });
 
     } catch (error) {
-      console.error('❌ Login error:', error);
+      console.error('[Login] Error:', error);
       setError(error.message || 'Login failed');
     } finally {
       setIsLoading(false);

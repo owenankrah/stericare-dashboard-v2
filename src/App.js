@@ -41,7 +41,7 @@ const LoadingFallback = ({ darkMode }) => (
 );
 
 function App() {
-  const navigate = useNavigate(); // ✅ Now works because BrowserRouter is in index.js
+  const navigate = useNavigate();
   
   // State management
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -85,7 +85,7 @@ function App() {
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔔 Auth event:', event);
+        console.log('[Auth] Event:', event);
         
         if (event === 'SIGNED_IN' && session) {
           const { data: profile } = await supabase
@@ -96,11 +96,11 @@ function App() {
             
           setCurrentUser({ ...session.user, profile });
           setIsAuthenticated(true);
-          console.log('✅ User authenticated:', session.user.email);
+          console.log('[Auth] User authenticated:', session.user.email);
         } else if (event === 'SIGNED_OUT') {
           setIsAuthenticated(false);
           setCurrentUser(null);
-          console.log('✅ User signed out');
+          console.log('[Auth] User signed out');
         }
       }
     );
@@ -110,11 +110,11 @@ function App() {
 
   const checkSession = async () => {
     try {
-      console.log('🔍 Checking for existing session...');
+      console.log('[Auth] Checking for existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        console.log('✅ Found session:', session.user.email);
+        console.log('[Auth] Found session:', session.user.email);
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('*')
@@ -124,31 +124,30 @@ function App() {
         setCurrentUser({ ...session.user, profile });
         setIsAuthenticated(true);
       } else {
-        console.log('❌ No session found');
+        console.log('[Auth] No session found');
       }
     } catch (error) {
-      console.error('Session error:', error);
+      console.error('[Auth] Session error:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogin = async (user) => {
-    console.log('🔐 Login callback received:', user.email);
+    console.log('[Auth] Login callback received:', user.email);
     
     setIsAuthenticated(true);
     setCurrentUser(user);
     
-    console.log('✅ Auth state updated');
+    console.log('[Auth] State updated successfully');
     
     // Return promise so Login.js can await
     return Promise.resolve();
   };
 
   const handleLogout = async () => {
-  console.log('🚪 Logout initiated...');
-  
-  try {
+    console.log('[Auth] Logout initiated...');
+    
     // Clear local state FIRST
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -157,30 +156,16 @@ function App() {
     localStorage.clear();
     sessionStorage.clear();
     
-    // Then sign out from Supabase (might fail, that's OK)
-    try {
-      await supabase.auth.signOut();
-      console.log('✅ Supabase signOut complete');
-    } catch (supabaseError) {
-      // Ignore AbortError - we're logging out anyway
-      console.log('⚠️ Supabase signOut error (ignored):', supabaseError.message);
-    }
+    // Sign out from Supabase (fire and forget - ignore errors)
+    supabase.auth.signOut().catch(err => {
+      console.log('[Auth] Supabase signOut warning (ignored):', err.message);
+    });
     
-    // Navigate to login
-    navigate('/login');
-    console.log('✅ Logged out successfully');
-    
-  } catch (error) {
-    console.error('❌ Logout error:', error);
-    
-    // Force logout even if everything fails
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    localStorage.clear();
-    sessionStorage.clear();
+    // Force full page reload to login (bypasses React Router issues)
     window.location.href = '/login';
-  }
-};
+    
+    console.log('[Auth] Logout complete');
+  };
 
   // Show loading screen while checking session
   if (loading) {

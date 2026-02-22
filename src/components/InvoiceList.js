@@ -7,15 +7,15 @@ import { useNavigate } from 'react-router-dom';
 /**
  * INVOICE LIST COMPONENT - OPTIMIZED
  * Performance improvements:
- * ✅ Query caching (5 min TTL)
- * ✅ useMemo for filtered invoices
- * ✅ Cache invalidation on data changes
+ * - Query caching (5 min TTL)
+ * - useMemo for filtered invoices
+ * - Cache invalidation on data changes
  */
 
 const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false); // ✅ ADD THIS
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -36,17 +36,17 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
     const cacheKey = 'invoices_all';
     
     try {
-      // Check cache first ✅
+      // Check cache first
       if (queryCache.isValid(cacheKey)) {
         const cached = queryCache.get(cacheKey);
-        console.log('✅ Cache hit: Loading invoices from cache');
+        console.log('[Invoices] Cache hit: Loading from cache');
         setInvoices(cached);
         setLoading(false);
         return;
       }
       
       // Cache miss - fetch from database
-      console.log('📡 Cache miss: Fetching invoices from database');
+      console.log('[Invoices] Cache miss: Fetching from database');
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -83,12 +83,12 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
       
       setInvoices(data || []);
       
-      // Cache for 5 minutes ✅
+      // Cache for 5 minutes
       queryCache.set(cacheKey, data || [], 300000);
-      console.log('💾 Invoices cached for 5 minutes');
+      console.log('[Invoices] Cached for 5 minutes');
       
     } catch (error) {
-      console.error('Error loading invoices:', error);
+      console.error('[Invoices] Error loading:', error);
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
   // ==========================================
   
   const filteredInvoices = useMemo(() => {
-    console.log('🔄 Filtering invoices...');
+    console.log('[Invoices] Filtering...');
     
     return invoices.filter(invoice => {
       // Search filter
@@ -134,12 +134,12 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
   const handleDownloadPDF = async (invoice) => {
     try {
       setIsGeneratingPDF(true);
-      console.log('📄 Generating PDF for invoice:', invoice.invoice_number);
+      console.log('[PDF] Generating for invoice:', invoice.invoice_number);
       
       // Make sure API_BASE_URL is defined
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://stericare-dashboard-v2-1.onrender.com';
       
-      console.log('🔗 API URL:', API_BASE_URL);
+      console.log('[PDF] API URL:', API_BASE_URL);
       
       const response = await fetch(`${API_BASE_URL}/api/invoices/pdf`, {
         method: 'POST',
@@ -151,11 +151,11 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
         })
       });
 
-      console.log('📡 Response status:', response.status);
+      console.log('[PDF] Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('PDF generation failed:', errorText);
+        console.error('[PDF] Generation failed:', errorText);
         throw new Error('PDF generation failed');
       }
 
@@ -174,10 +174,10 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
-      console.log('✅ PDF downloaded successfully');
+      console.log('[PDF] Downloaded successfully');
       
     } catch (error) {
-      console.error('Error downloading PDF:', error);
+      console.error('[PDF] Error downloading:', error);
       alert('Failed to download PDF. Please try again.');
     } finally {
       setIsGeneratingPDF(false);
