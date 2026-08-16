@@ -46,7 +46,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
       costPerUnit: 0,
       discount: 0,
       priceListId: null,
-      priceListName: 'Standard price'
+      priceListName: 'Standard price',
+      priceListType: 'standard',
+      assignmentType: 'default',
+      isPriceLocked: false
     }
   ]);
   
@@ -183,7 +186,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
         costPerUnit: 0,
         discount: 0,
         priceListId: null,
-        priceListName: 'Standard price'
+        priceListName: 'Standard price',
+        priceListType: 'standard',
+        assignmentType: 'default',
+        isPriceLocked: false
       }
     ]);
   }, []);
@@ -243,7 +249,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
         ...item,
         unitPrice: Number(resolved.unit_price ?? standardPrice),
         priceListId: resolved.price_list_id || null,
-        priceListName: resolved.price_list_name || 'Standard price'
+        priceListName: resolved.price_list_name || 'Standard price',
+        priceListType: resolved.price_list_type || 'standard',
+        assignmentType: resolved.assignment_type || 'default',
+        isPriceLocked: Boolean(resolved.is_price_locked)
       } : item));
     }
   }, [selectedCustomer, saleDate]);
@@ -252,6 +261,15 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
     updateLineItem(lineId, 'product', product);
     if (product) applyCustomerPrice(lineId, product, 1);
   }, [updateLineItem, applyCustomerPrice]);
+
+  useEffect(() => {
+    if (!selectedCustomer?.id) return;
+    lineItems.forEach(item => {
+      if (item.product) applyCustomerPrice(item.id, item.product, item.units || 1);
+    });
+    // Reprice only when the customer or invoice date changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomer?.id, saleDate]);
 
   const getAvailableStock = useCallback((product) => {
     const inventory = Array.isArray(product?.inventory) ? product.inventory[0] : product?.inventory;
@@ -400,7 +418,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
             discount_amount: lineDiscount,
             line_total: lineTotal,
             price_list_id: item.priceListId || null,
-            price_list_name: item.priceListName || 'Standard price'
+            price_list_name: item.priceListName || 'Standard price',
+            price_list_type: item.priceListType || 'standard',
+            price_assignment_type: item.assignmentType || 'default'
           };
         });
       
@@ -471,7 +491,10 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
         costPerUnit: 0,
         discount: 0,
         priceListId: null,
-        priceListName: 'Standard price'
+        priceListName: 'Standard price',
+        priceListType: 'standard',
+        assignmentType: 'default',
+        isPriceLocked: false
       }
     ]);
   }, []);
@@ -677,6 +700,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
                     type="number"
                     value={item.unitPrice}
                     onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value))}
+                    disabled={item.isPriceLocked && !['admin', 'manager'].includes(currentUser?.role)}
                     step="0.01"
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
@@ -684,6 +708,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
                         : 'bg-white border-gray-300 text-gray-900'
                     }`}
                   />
+                  {item.isPriceLocked && <p className="mt-1 text-xs text-amber-600">Contract price locked</p>}
                 </div>
                 
                 {/* Remove Button */}

@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
  * Features: Search, filter, sort, pagination, bulk actions
  */
 
-const CRMDashboard = ({ darkMode }) => {
+const CRMDashboard = ({ darkMode, currentUser }) => {
   const navigate = useNavigate();
   
   // State
@@ -29,6 +29,8 @@ const CRMDashboard = ({ darkMode }) => {
   const [customerForm, setCustomerForm] = useState({
     name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: ''
   });
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -37,6 +39,7 @@ const CRMDashboard = ({ darkMode }) => {
   });
 
   const itemsPerPage = 20;
+  const canManagePricing = ['admin', 'manager'].includes(currentUser?.profile?.role);
 
   // Load customers
   const loadCustomers = useCallback(async () => {
@@ -95,6 +98,11 @@ const CRMDashboard = ({ darkMode }) => {
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
+
+  useEffect(() => {
+    supabase.from('customer_groups').select('id, name, code').eq('is_active', true).order('name')
+      .then(({ data, error }) => { if (error) console.warn('Customer groups unavailable:', error.message); else setCustomerGroups(data || []); });
+  }, []);
 
   useEffect(() => {
     const closeMenu = () => setOpenCustomerMenu(null);
@@ -209,16 +217,23 @@ const CRMDashboard = ({ darkMode }) => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw userError || new Error('User is not authenticated');
-      const { error } = await supabase.from('customers').insert({
+      const { data: createdCustomer, error } = await supabase.from('customers').insert({
         ...customerForm,
         name: customerForm.name.trim(),
         region: customerForm.region.trim(),
         email: customerForm.email.trim() || null,
         created_by: user.id,
         is_active: true
-      });
+      }).select('id').single();
       if (error) throw error;
+      if (selectedGroupIds.length > 0) {
+        const { error: membershipError } = await supabase.from('customer_group_members').insert(
+          selectedGroupIds.map(groupId => ({ group_id: groupId, customer_id: createdCustomer.id, created_by: user.id }))
+        );
+        if (membershipError) throw membershipError;
+      }
       setCustomerForm({ name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: '' });
+      setSelectedGroupIds([]);
       setShowNewCustomer(false);
       await loadCustomers();
     } catch (error) {
@@ -703,6 +718,18 @@ const CRMDashboard = ({ darkMode }) => {
                   <option>Hospital</option><option>Clinic</option><option>Pharmacy</option><option>Distributor</option><option>Facility</option>
                 </select>
               </label>
+              {canManagePricing && <fieldset className="md:col-span-2">
+                <legend className="block text-sm font-medium mb-2">Customer groups</legend>
+                <div className={`grid sm:grid-cols-2 gap-2 rounded-lg border p-3 ${darkMode ? 'border-gray-600 bg-gray-700/40' : 'border-gray-300 bg-gray-50'}`}>
+                  {customerGroups.length === 0 ? <span className="text-sm opacity-60">No active customer groups.</span> : customerGroups.map(group => (
+                    <label key={group.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={selectedGroupIds.includes(group.id)} onChange={() => setSelectedGroupIds(current => current.includes(group.id) ? current.filter(id => id !== group.id) : [...current, group.id])}/>
+                      <span>{group.name} <span className="opacity-60">({group.code})</span></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs opacity-60">Assigned contract or promotional prices will apply automatically.</p>
+              </fieldset>}
             </div>
             <div className={`flex justify-end gap-3 px-6 py-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <button type="button" onClick={() => setShowNewCustomer(false)} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>Cancel</button>

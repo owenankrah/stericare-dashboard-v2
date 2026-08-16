@@ -4,7 +4,7 @@ import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileTex
 import { supabase } from '../../lib/supabase';
 import SalesEntry from '../SalesEntry';
 
-const CustomerDetailCRM = ({ darkMode }) => {
+const CustomerDetailCRM = ({ darkMode, currentUser }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -25,6 +25,11 @@ const CustomerDetailCRM = ({ darkMode }) => {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [savingActivity, setSavingActivity] = useState(false);
   const [activityForm, setActivityForm] = useState({ deal_id: '', type: 'call', title: '', content: '', follow_up_at: '' });
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
+  const [effectivePriceLists, setEffectivePriceLists] = useState([]);
+  const [savingGroups, setSavingGroups] = useState(false);
+  const canManagePricing = ['admin', 'manager'].includes(currentUser?.profile?.role);
 
   const loadCustomerData = useCallback(async () => {
     setLoading(true);
@@ -43,6 +48,15 @@ const CustomerDetailCRM = ({ darkMode }) => {
       }
 
       setCustomer(customerData);
+
+      const [groupsResult, membershipsResult, pricingResult] = await Promise.all([
+        supabase.from('customer_groups').select('id, name, code').eq('is_active', true).order('name'),
+        supabase.from('customer_group_members').select('group_id').eq('customer_id', id).eq('is_active', true),
+        supabase.from('customer_effective_price_lists').select('*').eq('customer_id', id).order('priority')
+      ]);
+      if (!groupsResult.error) setCustomerGroups(groupsResult.data || []);
+      if (!membershipsResult.error) setSelectedGroupIds((membershipsResult.data || []).map(item => item.group_id));
+      if (!pricingResult.error) setEffectivePriceLists(pricingResult.data || []);
 
       // Load invoices
       const { data: invoicesData, error: invoicesError } = await supabase
@@ -138,6 +152,32 @@ const CustomerDetailCRM = ({ darkMode }) => {
       window.alert(activityError.message || 'Unable to save activity.');
     } finally {
       setSavingActivity(false);
+    }
+  };
+
+  const saveCustomerGroups = async () => {
+    setSavingGroups(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: existing, error: existingError } = await supabase.from('customer_group_members').select('group_id, is_active').eq('customer_id', id);
+      if (existingError) throw existingError;
+      const existingIds = (existing || []).map(item => item.group_id);
+      const operations = [];
+      selectedGroupIds.forEach(groupId => {
+        if (existingIds.includes(groupId)) operations.push(supabase.from('customer_group_members').update({ is_active: true }).eq('customer_id', id).eq('group_id', groupId));
+        else operations.push(supabase.from('customer_group_members').insert({ customer_id: id, group_id: groupId, created_by: user?.id }));
+      });
+      existingIds.filter(groupId => !selectedGroupIds.includes(groupId)).forEach(groupId => {
+        operations.push(supabase.from('customer_group_members').update({ is_active: false }).eq('customer_id', id).eq('group_id', groupId));
+      });
+      const results = await Promise.all(operations);
+      const failed = results.find(result => result.error);
+      if (failed) throw failed.error;
+      await loadCustomerData();
+    } catch (groupError) {
+      window.alert(groupError.message || 'Unable to update customer groups.');
+    } finally {
+      setSavingGroups(false);
     }
   };
 
@@ -547,6 +587,24 @@ const CustomerDetailCRM = ({ darkMode }) => {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className={`rounded-xl p-6 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <h3 className={`font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Pricing & Customer Groups</h3>
+              <div className="space-y-2 mb-4">
+                {customerGroups.length === 0 ? <p className="text-sm opacity-60">No customer groups configured.</p> : customerGroups.map(group => (
+                  <label key={group.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={!canManagePricing} checked={selectedGroupIds.includes(group.id)} onChange={() => setSelectedGroupIds(current => current.includes(group.id) ? current.filter(groupId => groupId !== group.id) : [...current, group.id])}/>
+                    <span>{group.name} <span className="opacity-60">({group.code})</span></span>
+                  </label>
+                ))}
+              </div>
+              {canManagePricing && <button onClick={saveCustomerGroups} disabled={savingGroups} className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 text-sm font-medium disabled:opacity-50">{savingGroups ? 'Saving…' : 'Save Group Memberships'}</button>}
+              <div className="mt-4 border-t border-gray-500/20 pt-3">
+                <div className="text-xs uppercase tracking-wide opacity-60 mb-2">Effective pricing</div>
+                {effectivePriceLists.length === 0 ? <p className="text-sm">Standard prices</p> : effectivePriceLists.map(list => <div key={`${list.price_list_id}-${list.assignment_type}`} className="text-sm mb-2"><div className="font-medium">{list.price_list_name}</div><div className="text-xs opacity-60">{list.list_type} · via {list.customer_group_name || 'direct assignment'} · priority {list.priority}</div></div>)}
               </div>
             </div>
 

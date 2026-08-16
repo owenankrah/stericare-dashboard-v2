@@ -25,6 +25,7 @@ const CRMDashboard = lazy(() => import('./components/CRM/CRMDashboard'));
 const CustomerDetailCRM = lazy(() => import('./components/CRM/CustomerDetailCRM'));
 const SalesPipeline = lazy(() => import('./components/CRM/SalesPipeline'));
 const DealManager = lazy(() => import('./components/CRM/DealManager'));
+const PricingManagement = lazy(() => import('./components/PricingManagement'));
 
 // Loading fallback component
 const LoadingFallback = ({ darkMode }) => (
@@ -266,7 +267,7 @@ function App() {
               path="/crm"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <CRMDashboard darkMode={darkMode} />
+                  <CRMDashboard darkMode={darkMode} currentUser={currentUser} />
                 </ProtectedRoute>
               }
             />
@@ -275,7 +276,7 @@ function App() {
               path="/crm/customer/:id"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <CustomerDetailCRM darkMode={darkMode} />
+                  <CustomerDetailCRM darkMode={darkMode} currentUser={currentUser} />
                 </ProtectedRoute>
               }
             />
@@ -333,6 +334,15 @@ function App() {
                     darkMode={darkMode} 
                     currentUser={currentUser} 
                   />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/pricing-management"
+              element={
+                <ProtectedRoute isAuthenticated={isAuthenticated}>
+                  <PricingManagement darkMode={darkMode} currentUser={currentUser} />
                 </ProtectedRoute>
               }
             />
