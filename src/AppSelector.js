@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import BackendStatus from './components/BackendStatus';
 import Settings from './components/Settings';
 
 const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
@@ -100,7 +99,6 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <BackendStatus darkMode={darkMode} />
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className={`p-2 rounded-lg transition-colors ${

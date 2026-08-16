@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-export const generateInvoicePDFClient = (invoice) => {
+export const buildInvoicePDF = (invoice) => {
   const doc = new jsPDF();
   
   // Header
@@ -60,8 +60,12 @@ export const generateInvoicePDFClient = (invoice) => {
   doc.setFont(undefined, 'normal');
   doc.text('Thank you for your business!', 105, 280, { align: 'center' });
   
-  // Save
-  doc.save(`${invoice.invoice_number}.pdf`);
-  
+  return doc;
+};
+
+export const buildInvoicePDFBlob = (invoice) => buildInvoicePDF(invoice).output('blob');
+
+export const generateInvoicePDFClient = (invoice) => {
+  buildInvoicePDF(invoice).save(`${invoice.invoice_number}.pdf`);
   return { success: true };
 };

@@ -6,7 +6,7 @@ import { supabase } from './lib/supabase';
 import ResetPassword from './ResetPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
-import { startKeepAlive, stopKeepAlive, prefetchCommonData } from './lib/api';
+import { prefetchCommonData } from './lib/api';
 
 // ==========================================
 // LAZY LOADING - Load modules only when needed
@@ -55,11 +55,9 @@ function App() {
   });
   const [loading, setLoading] = useState(true);
 
-  // Keep backend alive and prefetch common data
+  // Warm the browser cache. There is no persistent backend to keep alive.
   useEffect(() => {
-    startKeepAlive();
     prefetchCommonData();
-    return () => stopKeepAlive();
   }, []);
 
   // Check URL for password reset

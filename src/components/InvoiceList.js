@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Download, Eye, Search } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { generateInvoicePDF, downloadBlob } from '../lib/api';
 import { queryCache } from '../lib/queryCache';
 import { useNavigate } from 'react-router-dom';
 
@@ -136,43 +137,9 @@ const InvoiceList = ({ darkMode, onViewInvoice }) => {
       setIsGeneratingPDF(true);
       console.log('[PDF] Generating for invoice:', invoice.invoice_number);
       
-      // Make sure API_BASE_URL is defined
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://stericare-dashboard-v2-1.onrender.com';
-      
-      console.log('[PDF] API URL:', API_BASE_URL);
-      
-      const response = await fetch(`${API_BASE_URL}/api/invoices/pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          invoiceId: invoice.id
-        })
-      });
-
-      console.log('[PDF] Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[PDF] Generation failed:', errorText);
-        throw new Error('PDF generation failed');
-      }
-
-      // Get the PDF blob
-      const blob = await response.blob();
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Invoice-${invoice.invoice_number}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const result = await generateInvoicePDF(invoice.id);
+      if (!result.success) throw new Error(result.message || 'PDF generation failed');
+      downloadBlob(result.blob, `Invoice-${invoice.invoice_number}.pdf`);
       
       console.log('[PDF] Downloaded successfully');
       
