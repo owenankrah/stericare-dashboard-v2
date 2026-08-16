@@ -17,6 +17,7 @@ const DealManager = ({ darkMode, currentUser, dealId: dealIdProp, onClose, onSav
   const navigate = useNavigate();
   const { id: routeDealId } = useParams();
   const dealId = dealIdProp || routeDealId;
+  const customerIdFromQuery = new URLSearchParams(window.location.search).get('customerId');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -25,7 +26,7 @@ const DealManager = ({ darkMode, currentUser, dealId: dealIdProp, onClose, onSav
     value: '',
     stage: 'lead',
     probability: 30,
-    customer_id: '',
+    customer_id: customerIdFromQuery || '',
     close_date: '',
     expected_close_date: '',
     priority: 'medium',
@@ -153,6 +154,8 @@ const DealManager = ({ darkMode, currentUser, dealId: dealIdProp, onClose, onSav
 
       const dealData = {
         ...formData,
+        close_date: formData.close_date || null,
+        expected_close_date: formData.expected_close_date || null,
         customer_name: customer?.name,
         customer_type: customer?.customer_type,
         salesperson_id: currentUser?.id,

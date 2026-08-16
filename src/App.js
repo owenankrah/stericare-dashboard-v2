@@ -54,6 +54,9 @@ function App() {
     }
   });
   const [loading, setLoading] = useState(true);
+  const [compactMode, setCompactMode] = useState(() => {
+    try { return localStorage.getItem('compactMode') === 'true'; } catch { return false; }
+  });
 
   // Warm the browser cache. There is no persistent backend to keep alive.
   useEffect(() => {
@@ -76,6 +79,13 @@ function App() {
       console.error('Failed to save dark mode preference:', error);
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    try { localStorage.setItem('compactMode', compactMode); } catch (error) {
+      console.error('Failed to save compact mode preference:', error);
+    }
+    document.documentElement.classList.toggle('compact-mode', compactMode);
+  }, [compactMode]);
 
   // Auth state management
   useEffect(() => {
@@ -225,6 +235,8 @@ function App() {
                     onLogout={handleLogout}
                     darkMode={darkMode}
                     setDarkMode={setDarkMode}
+                    compactMode={compactMode}
+                    setCompactMode={setCompactMode}
                   />
                 </ProtectedRoute>
               }

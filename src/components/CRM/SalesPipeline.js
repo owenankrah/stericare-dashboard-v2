@@ -68,58 +68,35 @@ const SalesPipeline = ({ darkMode, currentUser }) => {
   const loadDeals = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: invoicesData, error } = await supabase
-        .from('invoices')
+      const { data: dealsData, error } = await supabase
+        .from('deals')
         .select(`
           *,
           customers(name, customer_type, email, phone)
         `)
-        .order('invoice_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Transform invoices into deals
-      const transformedDeals = (invoicesData || []).map((invoice) => {
-        // ✅ FIX #2: Use actual invoice data for deterministic stage assignment
-        let stage = 'lead';
-        
-        if (invoice.payment_status === 'Paid') {
-          stage = 'won';
-        } else if (invoice.stage) {
-          // Use existing stage field if available
-          stage = invoice.stage;
-        } else {
-          // Fallback: infer stage from payment status and invoice age
-          const daysOld = Math.floor((Date.now() - new Date(invoice.created_at).getTime()) / (1000 * 60 * 60 * 24));
-          if (daysOld > 30) {
-            stage = 'negotiation'; // Older invoices likely further along
-          } else if (daysOld > 14) {
-            stage = 'proposal';
-          } else if (daysOld > 7) {
-            stage = 'qualified';
-          } else {
-            stage = 'lead'; // Recent invoices start as leads
-          }
-        }
-
-        const probability = STAGE_PROBABILITIES[stage];
-
+      const transformedDeals = (dealsData || []).map((deal) => {
+        const stage = deal.stage || 'lead';
         return {
-          id: invoice.id,
-          title: `${invoice.customers?.name || 'Unknown'} Order`,
-          customer: invoice.customers?.name || 'Unknown',
-          customerType: invoice.customers?.customer_type || 'Unknown',
-          customerEmail: invoice.customers?.email || '',
-          customerPhone: invoice.customers?.phone || '',
-          value: invoice.total_amount || 0,
-          stage: stage,
-          probability: probability,
-          closeDate: invoice.invoice_date,
-          invoiceNumber: invoice.invoice_number,
-          status: invoice.payment_status,
-          notes: `Deal for invoice ${invoice.invoice_number}`,
-          salesperson: invoice.salesperson_name || currentUser?.profile?.full_name || 'Unknown',
-          createdAt: invoice.created_at
+          id: deal.id,
+          title: deal.title || `${deal.customer_name || deal.customers?.name || 'Customer'} Deal`,
+          customer: deal.customer_name || deal.customers?.name || 'Unknown',
+          customerType: deal.customer_type || deal.customers?.customer_type || 'Unknown',
+          customerEmail: deal.customers?.email || '',
+          customerPhone: deal.customers?.phone || '',
+          value: Number(deal.value || 0),
+          stage,
+          probability: Number(deal.probability ?? STAGE_PROBABILITIES[stage] ?? 20),
+          closeDate: deal.close_date || deal.created_at,
+          invoiceNumber: null,
+          status: stage === 'won' ? 'Won' : 'Active',
+          notes: deal.notes || '',
+          salesperson: currentUser?.profile?.full_name || 'Unknown',
+          createdAt: deal.created_at,
+          raw: deal
         };
       });
 
@@ -130,7 +107,7 @@ const SalesPipeline = ({ darkMode, currentUser }) => {
       // ✅ FIX #9: Enhanced error logging with context for better troubleshooting
       const errorMsg = error?.message || 'Unknown error';
       const errorCode = error?.code || error?.status || 'N/A';
-      console.error('❌ Error loading deals from invoices:', {
+      console.error('❌ Error loading deals:', {
         message: errorMsg,
         code: errorCode,
         timestamp: new Date().toISOString(),

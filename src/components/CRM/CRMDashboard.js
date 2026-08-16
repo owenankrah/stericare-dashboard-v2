@@ -25,6 +25,7 @@ const CRMDashboard = ({ darkMode }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
+  const [openCustomerMenu, setOpenCustomerMenu] = useState(null);
   const [customerForm, setCustomerForm] = useState({
     name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: ''
   });
@@ -94,6 +95,25 @@ const CRMDashboard = ({ darkMode }) => {
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
+
+  useEffect(() => {
+    const closeMenu = () => setOpenCustomerMenu(null);
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, []);
+
+  const toggleCustomerStatus = async (customer) => {
+    const { error } = await supabase
+      .from('customers')
+      .update({ is_active: !customer.is_active })
+      .eq('id', customer.id);
+    if (error) {
+      window.alert(error.message || 'Unable to update customer status.');
+      return;
+    }
+    setOpenCustomerMenu(null);
+    loadCustomers();
+  };
 
   // Filter & search customers
   const filteredCustomers = useMemo(() => {
@@ -555,11 +575,11 @@ const CRMDashboard = ({ darkMode }) => {
                         {formatDate(customer.last_order_date)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 relative">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Show context menu
+                          setOpenCustomerMenu(openCustomerMenu === customer.id ? null : customer.id);
                         }}
                         className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
                       >
@@ -567,6 +587,18 @@ const CRMDashboard = ({ darkMode }) => {
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
                         </svg>
                       </button>
+                      {openCustomerMenu === customer.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute right-6 top-12 z-20 w-48 rounded-lg border shadow-xl overflow-hidden ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+                        >
+                          <button onClick={() => navigate(`/crm/customer/${customer.id}`)} className={`block w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-800'}`}>View customer</button>
+                          <button onClick={() => navigate(`/crm/deal/new?customerId=${customer.id}`)} className={`block w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-800'}`}>Create deal</button>
+                          <button onClick={() => toggleCustomerStatus(customer)} className={`block w-full px-4 py-2 text-left text-sm ${customer.is_active ? 'text-red-600' : 'text-emerald-600'} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}>
+                            {customer.is_active ? 'Deactivate customer' : 'Reactivate customer'}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -17,3 +17,11 @@
     @apply inline-block w-12 h-12 border-4 border-pharma-blue/30 border-t-pharma-blue rounded-full animate-spin;
   }
 }
+/* Compact mode is applied globally from Settings and persisted in localStorage. */
+.compact-mode .p-6 { padding: 1rem; }
+.compact-mode .py-12 { padding-top: 1.75rem; padding-bottom: 1.75rem; }
+.compact-mode .gap-6 { gap: 1rem; }
+.compact-mode .mb-12 { margin-bottom: 1.75rem; }
+.compact-mode .mt-12 { margin-top: 1.75rem; }
+.compact-mode .text-3xl { font-size: 1.5rem; line-height: 2rem; }
+.compact-mode .text-2xl { font-size: 1.25rem; line-height: 1.75rem; }

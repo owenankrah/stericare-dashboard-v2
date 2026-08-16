@@ -122,7 +122,24 @@ export function getSales(params = {}) { let query = supabase.from('invoices').se
 export const getSale = getInvoice, createSale = createInvoice, updateSale = updateInvoice, deleteSale = deleteInvoice;
 
 // Only privileged operation: an authenticated Supabase Edge Function.
-export async function createUser(value) { const { data, error } = await supabase.functions.invoke('admin-create-user', { body: value }); if (error) throw error; if (!data?.success) throw new Error(data?.message || data?.error || 'Unable to create user'); return data; }
+export async function createUser(value) {
+  const { data, error } = await supabase.functions.invoke('admin-create-user', { body: value });
+  if (error) {
+    let message = error.message || 'Unable to create user';
+    try {
+      const response = error.context;
+      if (response && typeof response.clone === 'function') {
+        const payload = await response.clone().json();
+        message = payload?.message || payload?.error || message;
+      }
+    } catch {
+      // Keep the original FunctionsHttpError message if the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  if (!data?.success) throw new Error(data?.message || data?.error || 'Unable to create user');
+  return data;
+}
 export const batchFetch = (requests) => Promise.allSettled(requests.map(({ fn }) => typeof fn === 'function' ? fn() : Promise.resolve(null)));
 export { generateInvoicePDFClient };
 

@@ -3,7 +3,7 @@ import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon 
 import { useNavigate } from 'react-router-dom';
 import Settings from './components/Settings';
 
-const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
+const AppSelector = ({ user, onLogout, darkMode, setDarkMode, compactMode, setCompactMode }) => {
   const [showSettings, setShowSettings] = useState(false);
   const navigate = useNavigate();
 
@@ -284,6 +284,8 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
         <Settings
           darkMode={darkMode}
           setDarkMode={setDarkMode}
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
           user={user}
           onClose={() => setShowSettings(false)}
           onNavigateToUserManagement={handleNavigateToUserManagement}

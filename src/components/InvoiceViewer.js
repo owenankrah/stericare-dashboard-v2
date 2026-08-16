@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { downloadBlob } from '../lib/api';
+import { downloadBlob, generateInvoicePDF } from '../lib/api';
 import { generateInvoicePDFClient } from '../lib/clientPDF';
 
 /**

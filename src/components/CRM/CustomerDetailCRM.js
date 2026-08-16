@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileText, TrendingUp, Edit } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileText, TrendingUp, Edit, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import SalesEntry from '../SalesEntry';
 
 const CustomerDetailCRM = ({ darkMode }) => {
   const { id } = useParams();
@@ -19,6 +20,11 @@ const CustomerDetailCRM = ({ darkMode }) => {
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('timeline');
+  const [deals, setDeals] = useState([]);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [activityForm, setActivityForm] = useState({ deal_id: '', type: 'call', title: '', content: '', follow_up_at: '' });
 
   const loadCustomerData = useCallback(async () => {
     setLoading(true);
@@ -49,6 +55,14 @@ const CustomerDetailCRM = ({ darkMode }) => {
       if (invoicesError) throw invoicesError;
       setInvoices(invoicesData || []);
 
+      const { data: dealsData, error: dealsError } = await supabase
+        .from('deals')
+        .select('id, title, stage, value, created_at, deal_activities(*)')
+        .eq('customer_id', id)
+        .order('created_at', { ascending: false });
+      if (dealsError) throw dealsError;
+      setDeals(dealsData || []);
+
       // Calculate stats
       if (invoicesData && invoicesData.length > 0) {
         const totalRevenue = invoicesData.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
@@ -73,7 +87,16 @@ const CustomerDetailCRM = ({ darkMode }) => {
         invoiceNumber: inv.invoice_number
       }));
 
-      setActivities(invoiceActivities);
+      const dealActivities = (dealsData || []).flatMap(deal => (deal.deal_activities || []).map(activity => ({
+        type: activity.type || 'note',
+        title: activity.title || 'Deal activity',
+        description: activity.content || '',
+        date: activity.follow_up_at || activity.created_at,
+        status: deal.stage,
+        dealId: deal.id,
+        dealTitle: deal.title
+      })));
+      setActivities([...invoiceActivities, ...dealActivities].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
 
     } catch (error) {
       console.error('Error loading customer:', error);
@@ -81,6 +104,42 @@ const CustomerDetailCRM = ({ darkMode }) => {
       setLoading(false);
     }
   }, [id]);
+
+  const openActivity = (type) => {
+    setActivityForm({
+      deal_id: deals[0]?.id || '',
+      type,
+      title: type === 'follow_up' ? 'Customer follow-up' : 'Customer activity',
+      content: '',
+      follow_up_at: type === 'follow_up' ? new Date().toISOString().slice(0, 16) : ''
+    });
+    setShowActivityModal(true);
+  };
+
+  const saveActivity = async (event) => {
+    event.preventDefault();
+    if (!activityForm.deal_id) {
+      window.alert('Create or select a deal before logging an activity.');
+      return;
+    }
+    setSavingActivity(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: activityError } = await supabase.from('deal_activities').insert({
+        deal_id: activityForm.deal_id,
+        type: activityForm.type,
+        content: `${activityForm.title.trim()}\n${activityForm.content.trim()}${activityForm.follow_up_at ? `\nFollow up: ${new Date(activityForm.follow_up_at).toLocaleString()}` : ''}`,
+        author_id: user?.id || null
+      });
+      if (activityError) throw activityError;
+      setShowActivityModal(false);
+      await loadCustomerData();
+    } catch (activityError) {
+      window.alert(activityError.message || 'Unable to save activity.');
+    } finally {
+      setSavingActivity(false);
+    }
+  };
 
   useEffect(() => {
     loadCustomerData();
@@ -498,17 +557,17 @@ const CustomerDetailCRM = ({ darkMode }) => {
               </h3>
               <div className="space-y-2">
                 <button
-                  onClick={() => navigate('/sales-invoicing')}
+                  onClick={() => setShowInvoiceModal(true)}
                   className="w-full px-4 py-2 bg-[#5EEAD4] hover:bg-[#5EEAD4]/90 text-[#1E3A8A] rounded-lg text-sm font-medium"
                 >
                   Create Invoice
                 </button>
-                <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
+                <button onClick={() => openActivity('call')} className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
                   darkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-50 text-gray-900'
                 }`}>
                   Log Activity
                 </button>
-                <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
+                <button onClick={() => openActivity('follow_up')} className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
                   darkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-50 text-gray-900'
                 }`}>
                   Schedule Follow-up
@@ -521,6 +580,37 @@ const CustomerDetailCRM = ({ darkMode }) => {
         </div>
 
       </div>
+
+      {showInvoiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto">
+          <div className={`max-w-6xl mx-auto rounded-xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+            <div className="sticky top-0 z-10 flex justify-between items-center px-6 py-4 border-b bg-inherit rounded-t-xl">
+              <h2 className="text-xl font-semibold">Create invoice for {customer.name}</h2>
+              <button onClick={() => setShowInvoiceModal(false)} aria-label="Close invoice"><X size={24} /></button>
+            </div>
+            <SalesEntry darkMode={darkMode} initialCustomerId={id} onInvoiceCreated={() => { setShowInvoiceModal(false); loadCustomerData(); }} />
+          </div>
+        </div>
+      )}
+
+      {showActivityModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center">
+          <form onSubmit={saveActivity} className={`w-full max-w-lg rounded-xl p-6 shadow-2xl ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}>
+            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-semibold">Log pipeline activity</h2><button type="button" onClick={() => setShowActivityModal(false)}><X size={22} /></button></div>
+            {deals.length === 0 ? (
+              <div className="mb-4 rounded-lg bg-amber-50 text-amber-800 p-3 text-sm">This customer has no deal yet. Create a deal first so the activity can appear in the pipeline.</div>
+            ) : (
+              <div className="space-y-4">
+                <label className="block text-sm">Deal<select required value={activityForm.deal_id} onChange={(e) => setActivityForm({ ...activityForm, deal_id: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}>{deals.map(deal => <option key={deal.id} value={deal.id}>{deal.title}</option>)}</select></label>
+                <label className="block text-sm">Title<input required value={activityForm.title} onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>
+                <label className="block text-sm">Notes<textarea required rows="4" value={activityForm.content} onChange={(e) => setActivityForm({ ...activityForm, content: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>
+                {activityForm.type === 'follow_up' && <label className="block text-sm">Follow-up date<input type="datetime-local" value={activityForm.follow_up_at} onChange={(e) => setActivityForm({ ...activityForm, follow_up_at: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowActivityModal(false)} className="px-4 py-2 rounded-lg border">Cancel</button>{deals.length > 0 && <button disabled={savingActivity} className="px-4 py-2 rounded-lg bg-[#5EEAD4] text-[#1E3A8A] font-medium">{savingActivity ? 'Saving…' : 'Save activity'}</button>}</div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

@@ -44,7 +44,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
       units: 0,
       unitPrice: 0,
       costPerUnit: 0,
-      discount: 0
+      discount: 0,
+      priceListId: null,
+      priceListName: 'Standard price'
     }
   ]);
   
@@ -179,7 +181,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
         units: 0,
         unitPrice: 0,
         costPerUnit: 0,
-        discount: 0
+        discount: 0,
+        priceListId: null,
+        priceListName: 'Standard price'
       }
     ]);
   }, []);
@@ -214,6 +218,40 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
       return item;
     }));
   }, []);
+
+  const applyCustomerPrice = useCallback(async (lineId, product, quantity = 1) => {
+    if (!product) return;
+    const standardPrice = Number(product.selling_price || product.unit_price || 0);
+    if (!selectedCustomer?.id) {
+      setLineItems(prev => prev.map(item => item.id === lineId ? { ...item, unitPrice: standardPrice, priceListId: null, priceListName: 'Standard price' } : item));
+      return;
+    }
+    const { data, error } = await supabase.rpc('resolve_customer_product_price', {
+      p_customer_id: selectedCustomer.id,
+      p_product_id: product.id,
+      p_quantity: Math.max(1, Number(quantity || 1)),
+      p_on_date: saleDate
+    });
+    if (error) {
+      // The migration may not be deployed yet; invoice entry must still work at standard price.
+      console.warn('Custom pricing unavailable; using standard price:', error.message);
+      return;
+    }
+    const resolved = Array.isArray(data) ? data[0] : data;
+    if (resolved) {
+      setLineItems(prev => prev.map(item => item.id === lineId ? {
+        ...item,
+        unitPrice: Number(resolved.unit_price ?? standardPrice),
+        priceListId: resolved.price_list_id || null,
+        priceListName: resolved.price_list_name || 'Standard price'
+      } : item));
+    }
+  }, [selectedCustomer, saleDate]);
+
+  const selectProductForLine = useCallback((lineId, product) => {
+    updateLineItem(lineId, 'product', product);
+    if (product) applyCustomerPrice(lineId, product, 1);
+  }, [updateLineItem, applyCustomerPrice]);
 
   const getAvailableStock = useCallback((product) => {
     const inventory = Array.isArray(product?.inventory) ? product.inventory[0] : product?.inventory;
@@ -360,7 +398,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
             line_profit: lineProfit,
             line_margin: lineMargin,
             discount_amount: lineDiscount,
-            line_total: lineTotal
+            line_total: lineTotal,
+            price_list_id: item.priceListId || null,
+            price_list_name: item.priceListName || 'Standard price'
           };
         });
       
@@ -429,7 +469,9 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
         units: 0,
         unitPrice: 0,
         costPerUnit: 0,
-        discount: 0
+        discount: 0,
+        priceListId: null,
+        priceListName: 'Standard price'
       }
     ]);
   }, []);
@@ -567,7 +609,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
                     value={item.product?.id || ''}
                     onChange={(e) => {
                       const product = products.find(p => p.id === e.target.value);
-                      updateLineItem(item.id, 'product', product);
+                      selectProductForLine(item.id, product);
                     }}
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
@@ -590,6 +632,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
                     }`}>
                       Available stock: {getAvailableStock(item.product).toLocaleString()} units
                       {Number(item.units || 0) > getAvailableStock(item.product) && ' — requested quantity exceeds stock'}
+                      <span className="block">Price source: {item.priceListName || 'Standard price'}</span>
                     </p>
                   )}
                 </div>
@@ -617,6 +660,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) =>
                     type="number"
                     value={item.units}
                     onChange={(e) => updateLineItem(item.id, 'units', e.target.value)}
+                    onBlur={() => item.product && applyCustomerPrice(item.id, item.product, item.units)}
                     min="0"
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
