@@ -536,7 +536,7 @@ const SalesPipeline = ({ darkMode, currentUser }) => {
                 )}
               </button>
               <button
-                onClick={() => navigate('/sales-invoicing')}
+                onClick={() => navigate('/crm/deal/new')}
                 className="px-6 py-2 bg-[#5EEAD4] hover:bg-[#5EEAD4]/90 text-[#1E3A8A] rounded-lg font-medium flex items-center gap-2"
               >
                 <Plus size={18} />

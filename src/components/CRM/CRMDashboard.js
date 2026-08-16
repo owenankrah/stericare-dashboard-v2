@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Download, Plus, Users, TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { Search, Filter, Download, Plus, Users, TrendingUp, DollarSign, Activity, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 /**
@@ -23,6 +23,11 @@ const CRMDashboard = ({ darkMode }) => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedCustomers, setSelectedCustomers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [customerForm, setCustomerForm] = useState({
+    name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: ''
+  });
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -175,6 +180,33 @@ const CRMDashboard = ({ darkMode }) => {
   const handleExport = () => {
     // TODO: Implement CSV export
     alert('Export functionality coming soon!');
+  };
+
+  const handleCreateCustomer = async (event) => {
+    event.preventDefault();
+    if (!customerForm.name.trim() || !customerForm.region.trim()) return;
+    setSavingCustomer(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw userError || new Error('User is not authenticated');
+      const { error } = await supabase.from('customers').insert({
+        ...customerForm,
+        name: customerForm.name.trim(),
+        region: customerForm.region.trim(),
+        email: customerForm.email.trim() || null,
+        created_by: user.id,
+        is_active: true
+      });
+      if (error) throw error;
+      setCustomerForm({ name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: '' });
+      setShowNewCustomer(false);
+      await loadCustomers();
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      alert('Failed to create customer: ' + error.message);
+    } finally {
+      setSavingCustomer(false);
+    }
   };
 
   const getCustomerTypeColor = (type) => {
@@ -367,7 +399,7 @@ const CRMDashboard = ({ darkMode }) => {
             </button>
 
             <button
-              onClick={() => navigate('/crm/new')}
+              onClick={() => setShowNewCustomer(true)}
               className="px-6 py-2 bg-[#5EEAD4] hover:bg-[#5EEAD4]/90 text-[#1E3A8A] rounded-lg font-medium flex items-center gap-2 shadow-sm"
             >
               <Plus size={18} />
@@ -600,6 +632,55 @@ const CRMDashboard = ({ darkMode }) => {
           </div>
         </div>
       </div>
+
+      {showNewCustomer && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <form onSubmit={handleCreateCustomer} className={`w-full max-w-2xl rounded-xl shadow-2xl ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}>
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div>
+                <h2 className="text-xl font-bold">New Customer</h2>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Add a facility or customer to the CRM.</p>
+              </div>
+              <button type="button" onClick={() => setShowNewCustomer(false)} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                ['name', 'Customer name *'], ['region', 'Region *'], ['contact_person', 'Contact person'],
+                ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address']
+              ].map(([field, label]) => (
+                <label key={field} className={field === 'address' ? 'md:col-span-2' : ''}>
+                  <span className="block text-sm font-medium mb-1">{label}</span>
+                  <input
+                    type={field === 'email' ? 'email' : 'text'}
+                    required={field === 'name' || field === 'region'}
+                    value={customerForm[field]}
+                    onChange={(event) => setCustomerForm((current) => ({ ...current, [field]: event.target.value }))}
+                    className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                  />
+                </label>
+              ))}
+              <label>
+                <span className="block text-sm font-medium mb-1">Customer type</span>
+                <select
+                  value={customerForm.customer_type}
+                  onChange={(event) => setCustomerForm((current) => ({ ...current, customer_type: event.target.value }))}
+                  className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                >
+                  <option>Hospital</option><option>Clinic</option><option>Pharmacy</option><option>Distributor</option><option>Facility</option>
+                </select>
+              </label>
+            </div>
+            <div className={`flex justify-end gap-3 px-6 py-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button type="button" onClick={() => setShowNewCustomer(false)} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>Cancel</button>
+              <button type="submit" disabled={savingCustomer} className="px-5 py-2 rounded-lg bg-[#5EEAD4] text-[#1E3A8A] font-medium disabled:opacity-50">
+                {savingCustomer ? 'Saving...' : 'Create Customer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

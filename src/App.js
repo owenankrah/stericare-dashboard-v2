@@ -82,44 +82,40 @@ function App() {
     checkSession();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-  (event, session) => {
-    console.log('[Auth] Event:', event);
+      (event, session) => {
+        console.log('[Auth] Event:', event);
+        
+        if (event === 'SIGNED_IN' && session) {
+          // Do not await another Supabase request inside onAuthStateChange.
+          // The auth client can still hold its internal lock while this callback
+          // runs, which can deadlock getSession() during application startup.
+          setTimeout(async () => {
+            try {
+              const { data: profile, error } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
 
-    if (event === 'SIGNED_IN' && session) {
-      setTimeout(async () => {
-        try {
-          const { data: profile, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+              if (error) {
+                console.error('[Auth] Profile error:', error);
+              }
 
-          if (error) {
-            console.error('[Auth] Profile error:', error);
-          }
-
-          setCurrentUser({
-            ...session.user,
-            profile: profile || null,
-          });
-
-          setIsAuthenticated(true);
-          console.log(
-            '[Auth] User authenticated:',
-            session.user.email,
-          );
-        } finally {
+              setCurrentUser({ ...session.user, profile: profile || null });
+              setIsAuthenticated(true);
+              console.log('[Auth] User authenticated:', session.user.email);
+            } finally {
+              setLoading(false);
+            }
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          setIsAuthenticated(false);
+          setCurrentUser(null);
           setLoading(false);
+          console.log('[Auth] User signed out');
         }
-      }, 0);
-    } else if (event === 'SIGNED_OUT') {
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setLoading(false);
-      console.log('[Auth] User signed out');
-    }
-  },
-);
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
@@ -239,7 +235,7 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <AnalyticsDashboard darkMode={darkMode} />
+                  <AnalyticsDashboard darkMode={darkMode} setDarkMode={setDarkMode} />
                 </ProtectedRoute>
               }
             />
@@ -248,7 +244,7 @@ function App() {
               path="/sales-invoicing"
               element={
                 <ProtectedRoute isAuthenticated={isAuthenticated}>
-                  <SalesInvoicingModule darkMode={darkMode} />
+                  <SalesInvoicingModule darkMode={darkMode} setDarkMode={setDarkMode} />
                 </ProtectedRoute>
               }
             />

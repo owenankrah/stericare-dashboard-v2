@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
  * ✅ Cache invalidation on save
  */
 
-const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
+const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) => {
   const navigate = useNavigate();
   // ==========================================
   // STATE MANAGEMENT
@@ -84,7 +84,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       const cached = queryCache.get(cacheKey);
       console.log('✅ Cache hit: Customers dropdown');
       setCustomers(cached);
-      return;
+      return cached;
     }
     
     // Fetch from database
@@ -98,6 +98,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     setCustomers(data || []);
     queryCache.set(cacheKey, data || [], 600000);
     console.log('💾 Customers cached for 10 minutes');
+    return data || [];
   };
   
   // ==========================================
@@ -105,33 +106,38 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
   // ==========================================
   
   const loadProducts = async () => {
-    const cacheKey = 'products_dropdown';
+    const cacheKey = 'products_dropdown_with_inventory_v1';
     
     // Check cache (10 min TTL)
     if (queryCache.isValid(cacheKey, 600000)) {
       const cached = queryCache.get(cacheKey);
       console.log('✅ Cache hit: Products dropdown');
       setProducts(cached);
-      return;
+      return cached;
     }
     
     // Fetch from database
     console.log('📡 Fetching products...');
     const { data } = await supabase
       .from('products')
-      .select('*')
+      .select('*, inventory(boxes_in_stock, loose_units_in_stock, units_per_box)')
       .eq('is_active', true)
       .order('product_name');
     
     setProducts(data || []);
     queryCache.set(cacheKey, data || [], 600000);
     console.log('💾 Products cached for 10 minutes');
+    return data || [];
   };
   
   const loadMasterData = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadCustomers(), loadProducts()]);
+      const [loadedCustomers] = await Promise.all([loadCustomers(), loadProducts()]);
+      if (initialCustomerId) {
+        const initialCustomer = loadedCustomers.find((customer) => customer.id === initialCustomerId);
+        if (initialCustomer) selectCustomer(initialCustomer);
+      }
     } catch (error) {
       console.error('Error loading master data:', error);
     } finally {
@@ -207,6 +213,15 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       }
       return item;
     }));
+  }, []);
+
+  const getAvailableStock = useCallback((product) => {
+    const inventory = Array.isArray(product?.inventory) ? product.inventory[0] : product?.inventory;
+    if (!inventory) return 0;
+    return (
+      Number(inventory.boxes_in_stock || 0) * Number(inventory.units_per_box || product?.units_per_box || 1) +
+      Number(inventory.loose_units_in_stock || 0)
+    );
   }, []);
   
   // ==========================================
@@ -563,10 +578,20 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     <option value="">Select product...</option>
                     {products.map(product => (
                       <option key={product.id} value={product.id}>
-                        {product.product_name} (₵{product.selling_price || product.unit_price})
+                        {product.product_name} — Stock: {getAvailableStock(product)} units — ₵{product.selling_price || product.unit_price}
                       </option>
                     ))}
                   </select>
+                  {item.product && (
+                    <p className={`mt-1 text-xs font-medium ${
+                      Number(item.units || 0) > getAvailableStock(item.product)
+                        ? 'text-red-500'
+                        : darkMode ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}>
+                      Available stock: {getAvailableStock(item.product).toLocaleString()} units
+                      {Number(item.units || 0) > getAvailableStock(item.product) && ' — requested quantity exceeds stock'}
+                    </p>
+                  )}
                 </div>
                 
                 {/* Boxes */}

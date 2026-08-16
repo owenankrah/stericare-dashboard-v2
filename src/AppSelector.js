@@ -283,6 +283,7 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
       {showSettings && (
         <Settings
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
           user={user}
           onClose={() => setShowSettings(false)}
           onNavigateToUserManagement={handleNavigateToUserManagement}
