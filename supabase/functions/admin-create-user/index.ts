@@ -1,12 +1,16 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const cors = {
+const corsHeaders = (req: Request) => ({
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+  'Access-Control-Allow-Headers': req.headers.get('Access-Control-Request-Headers') ||
+    'authorization, x-client-info, x-client-version, x-application-name, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
+});
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  const cors = corsHeaders(req);
+  if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers: cors });
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) throw new Error('Missing authorization token');
@@ -45,6 +49,7 @@ Deno.serve(async (req) => {
     return Response.json({ success: true, userId: created.user.id, email: created.user.email }, { headers: cors });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
+    console.error('[admin-create-user]', message, error);
     return Response.json({ success: false, error: message, message }, { status: /access|required|session|token/i.test(message) ? 403 : 400, headers: cors });
   }
 });

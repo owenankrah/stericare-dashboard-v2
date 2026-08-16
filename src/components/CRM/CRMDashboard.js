@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Download, Plus, Users, TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { Search, Filter, Download, Plus, Users, TrendingUp, DollarSign, Activity, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 /**
@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
  * Features: Search, filter, sort, pagination, bulk actions
  */
 
-const CRMDashboard = ({ darkMode }) => {
+const CRMDashboard = ({ darkMode, currentUser }) => {
   const navigate = useNavigate();
   
   // State
@@ -23,6 +23,14 @@ const CRMDashboard = ({ darkMode }) => {
   const [sortDirection, setSortDirection] = useState('asc');
   const [selectedCustomers, setSelectedCustomers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [openCustomerMenu, setOpenCustomerMenu] = useState(null);
+  const [customerForm, setCustomerForm] = useState({
+    name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: ''
+  });
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -31,6 +39,7 @@ const CRMDashboard = ({ darkMode }) => {
   });
 
   const itemsPerPage = 20;
+  const canManagePricing = ['admin', 'manager'].includes(currentUser?.profile?.role);
 
   // Load customers
   const loadCustomers = useCallback(async () => {
@@ -89,6 +98,30 @@ const CRMDashboard = ({ darkMode }) => {
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
+
+  useEffect(() => {
+    supabase.from('customer_groups').select('id, name, code').eq('is_active', true).order('name')
+      .then(({ data, error }) => { if (error) console.warn('Customer groups unavailable:', error.message); else setCustomerGroups(data || []); });
+  }, []);
+
+  useEffect(() => {
+    const closeMenu = () => setOpenCustomerMenu(null);
+    document.addEventListener('click', closeMenu);
+    return () => document.removeEventListener('click', closeMenu);
+  }, []);
+
+  const toggleCustomerStatus = async (customer) => {
+    const { error } = await supabase
+      .from('customers')
+      .update({ is_active: !customer.is_active })
+      .eq('id', customer.id);
+    if (error) {
+      window.alert(error.message || 'Unable to update customer status.');
+      return;
+    }
+    setOpenCustomerMenu(null);
+    loadCustomers();
+  };
 
   // Filter & search customers
   const filteredCustomers = useMemo(() => {
@@ -175,6 +208,40 @@ const CRMDashboard = ({ darkMode }) => {
   const handleExport = () => {
     // TODO: Implement CSV export
     alert('Export functionality coming soon!');
+  };
+
+  const handleCreateCustomer = async (event) => {
+    event.preventDefault();
+    if (!customerForm.name.trim() || !customerForm.region.trim()) return;
+    setSavingCustomer(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw userError || new Error('User is not authenticated');
+      const { data: createdCustomer, error } = await supabase.from('customers').insert({
+        ...customerForm,
+        name: customerForm.name.trim(),
+        region: customerForm.region.trim(),
+        email: customerForm.email.trim() || null,
+        created_by: user.id,
+        is_active: true
+      }).select('id').single();
+      if (error) throw error;
+      if (selectedGroupIds.length > 0) {
+        const { error: membershipError } = await supabase.from('customer_group_members').insert(
+          selectedGroupIds.map(groupId => ({ group_id: groupId, customer_id: createdCustomer.id, created_by: user.id }))
+        );
+        if (membershipError) throw membershipError;
+      }
+      setCustomerForm({ name: '', customer_type: 'Hospital', region: '', contact_person: '', phone: '', email: '', address: '' });
+      setSelectedGroupIds([]);
+      setShowNewCustomer(false);
+      await loadCustomers();
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      alert('Failed to create customer: ' + error.message);
+    } finally {
+      setSavingCustomer(false);
+    }
   };
 
   const getCustomerTypeColor = (type) => {
@@ -367,7 +434,7 @@ const CRMDashboard = ({ darkMode }) => {
             </button>
 
             <button
-              onClick={() => navigate('/crm/new')}
+              onClick={() => setShowNewCustomer(true)}
               className="px-6 py-2 bg-[#5EEAD4] hover:bg-[#5EEAD4]/90 text-[#1E3A8A] rounded-lg font-medium flex items-center gap-2 shadow-sm"
             >
               <Plus size={18} />
@@ -523,11 +590,11 @@ const CRMDashboard = ({ darkMode }) => {
                         {formatDate(customer.last_order_date)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 relative">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Show context menu
+                          setOpenCustomerMenu(openCustomerMenu === customer.id ? null : customer.id);
                         }}
                         className={`${darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
                       >
@@ -535,6 +602,18 @@ const CRMDashboard = ({ darkMode }) => {
                           <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
                         </svg>
                       </button>
+                      {openCustomerMenu === customer.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute right-6 top-12 z-20 w-48 rounded-lg border shadow-xl overflow-hidden ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}
+                        >
+                          <button onClick={() => navigate(`/crm/customer/${customer.id}`)} className={`block w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-800'}`}>View customer</button>
+                          <button onClick={() => navigate(`/crm/deal/new?customerId=${customer.id}`)} className={`block w-full px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-50 text-gray-800'}`}>Create deal</button>
+                          <button onClick={() => toggleCustomerStatus(customer)} className={`block w-full px-4 py-2 text-left text-sm ${customer.is_active ? 'text-red-600' : 'text-emerald-600'} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}>
+                            {customer.is_active ? 'Deactivate customer' : 'Reactivate customer'}
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -600,6 +679,67 @@ const CRMDashboard = ({ darkMode }) => {
           </div>
         </div>
       </div>
+
+      {showNewCustomer && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <form onSubmit={handleCreateCustomer} className={`w-full max-w-2xl rounded-xl shadow-2xl ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}>
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div>
+                <h2 className="text-xl font-bold">New Customer</h2>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Add a facility or customer to the CRM.</p>
+              </div>
+              <button type="button" onClick={() => setShowNewCustomer(false)} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                ['name', 'Customer name *'], ['region', 'Region *'], ['contact_person', 'Contact person'],
+                ['phone', 'Phone'], ['email', 'Email'], ['address', 'Address']
+              ].map(([field, label]) => (
+                <label key={field} className={field === 'address' ? 'md:col-span-2' : ''}>
+                  <span className="block text-sm font-medium mb-1">{label}</span>
+                  <input
+                    type={field === 'email' ? 'email' : 'text'}
+                    required={field === 'name' || field === 'region'}
+                    value={customerForm[field]}
+                    onChange={(event) => setCustomerForm((current) => ({ ...current, [field]: event.target.value }))}
+                    className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                  />
+                </label>
+              ))}
+              <label>
+                <span className="block text-sm font-medium mb-1">Customer type</span>
+                <select
+                  value={customerForm.customer_type}
+                  onChange={(event) => setCustomerForm((current) => ({ ...current, customer_type: event.target.value }))}
+                  className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'}`}
+                >
+                  <option>Hospital</option><option>Clinic</option><option>Pharmacy</option><option>Distributor</option><option>Facility</option>
+                </select>
+              </label>
+              {canManagePricing && <fieldset className="md:col-span-2">
+                <legend className="block text-sm font-medium mb-2">Customer groups</legend>
+                <div className={`grid sm:grid-cols-2 gap-2 rounded-lg border p-3 ${darkMode ? 'border-gray-600 bg-gray-700/40' : 'border-gray-300 bg-gray-50'}`}>
+                  {customerGroups.length === 0 ? <span className="text-sm opacity-60">No active customer groups.</span> : customerGroups.map(group => (
+                    <label key={group.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={selectedGroupIds.includes(group.id)} onChange={() => setSelectedGroupIds(current => current.includes(group.id) ? current.filter(id => id !== group.id) : [...current, group.id])}/>
+                      <span>{group.name} <span className="opacity-60">({group.code})</span></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs opacity-60">Assigned contract or promotional prices will apply automatically.</p>
+              </fieldset>}
+            </div>
+            <div className={`flex justify-end gap-3 px-6 py-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <button type="button" onClick={() => setShowNewCustomer(false)} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>Cancel</button>
+              <button type="submit" disabled={savingCustomer} className="px-5 py-2 rounded-lg bg-[#5EEAD4] text-[#1E3A8A] font-medium disabled:opacity-50">
+                {savingCustomer ? 'Saving...' : 'Create Customer'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,70 +1,123 @@
-# Getting Started with Create React App
+# Pharma-C Business Management System
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Complete browser-first React and Supabase application for Pharma-C Medical
+Supplies. The application includes analytics, sales and invoicing, inventory,
+CRM, deal pipeline, user management, customer groups, contract pricing and
+promotional price lists.
 
-## Available Scripts
+The former always-on Render backend is no longer required. Browser-safe CRUD
+uses Supabase directly; privileged user creation runs in a Supabase Edge
+Function.
 
-In the project directory, you can run:
+## Requirements
 
-### `npm start`
+- Node.js 20 or newer (Node 23 also works for local development)
+- npm 10 or newer
+- A Supabase project
+- Supabase CLI only when deploying the Edge Function from the terminal
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## 1. Configure the frontend
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Copy the environment template:
 
-### `npm test`
+```bash
+cp .env.example .env
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Enter the URL and browser-safe anon key from **Supabase Dashboard → Project
+Settings → API**:
 
-### `npm run build`
+```env
+REACT_APP_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=YOUR_BROWSER_SAFE_ANON_KEY
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Never place the service-role key in `.env` or any React source file.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 2. Configure the database
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Run the following files in the Supabase SQL editor in this order:
 
-### `npm run eject`
+1. `supabase/migrations/20260816_browser_first_functions.sql`
+2. `supabase/migrations/20260816173000_customer_price_lists.sql`
+3. `supabase/migrations/20260816190000_unified_pricing.sql`
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+The price-list migrations are idempotent and can upgrade the existing project.
+Do not run old examples containing placeholder UUID values.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+After the database migration, follow `CHAG_PRICE_LIST_SETUP.md` from inside the
+application package. CHAG facilities can be added gradually as customers are
+obtained; they do not need to be preloaded.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## 3. Deploy the user-creation Edge Function
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Deploy `supabase/functions/admin-create-user` through the Supabase Dashboard or:
 
-## Learn More
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase functions deploy admin-create-user --no-verify-jwt
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The function handles CORS and validates the caller's authenticated admin role
+internally.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 4. Run locally
 
-### Code Splitting
+```bash
+npm install
+npm start
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Open `http://localhost:3000`.
 
-### Analyzing the Bundle Size
+## 5. Create a production build
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```bash
+npm run build
+```
 
-### Making a Progressive Web App
+The deployable static output is written to `build/`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Vercel deployment
 
-### Advanced Configuration
+Set the two `REACT_APP_SUPABASE_*` environment variables in Vercel and use:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- Build command: `npm run build`
+- Output directory: `build`
 
-### Deployment
+The project is a client-side routed React application. Ensure Vercel rewrites
+unknown paths to `/index.html` if deep links return 404.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Pricing workflow
 
-### `npm run build` fails to minify
+Administrators and managers can open **Pricing Management** to:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Create customer groups such as CHAG Facilities.
+- Create contract, promotion or custom price lists.
+- Enter product prices and quantity tiers.
+- Assign lists to a group or an individual customer.
+- Set dates, priority and active status.
+
+Lower priority numbers win. A promotion at priority `10` can temporarily
+override a contract at priority `20`. Invoice lines snapshot the applied price
+and price-list source so historical invoices do not change later.
+
+## Security
+
+- Keep `.env`, `src/.env`, service-role keys and local Supabase state out of Git.
+- Use the anon key in the browser; Row-Level Security controls access.
+- Price-list administration is restricted to admin and manager roles.
+- Contract prices are locked for sales representatives.
+- Run `supabase/rls-audit.sql` after schema changes to review table protection.
+
+## Recommended smoke test
+
+1. Sign in and open every application card.
+2. Create a customer and assign a customer group.
+3. Create a deal and confirm it appears in the pipeline.
+4. Create a price list, add a product and assign it to the group.
+5. Create an invoice and verify the price source and stock level.
+6. Change quantity and verify quantity-tier repricing.
+7. Download and print the invoice.
+8. Create a user as an administrator.

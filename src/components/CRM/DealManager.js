@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { X, Plus, Save, Search, Calendar, DollarSign, User, Tag, Briefcase, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import SalesEntry from '../SalesEntry';
 
 /**
  * PHASE 4: COMPLETE DEAL MANAGEMENT
@@ -12,8 +13,11 @@ import { supabase } from '../../lib/supabase';
  * - Full CRUD operations
  */
 
-const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
+const DealManager = ({ darkMode, currentUser, dealId: dealIdProp, onClose, onSave }) => {
   const navigate = useNavigate();
+  const { id: routeDealId } = useParams();
+  const dealId = dealIdProp || routeDealId;
+  const customerIdFromQuery = new URLSearchParams(window.location.search).get('customerId');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -22,12 +26,13 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
     value: '',
     stage: 'lead',
     probability: 30,
-    customer_id: '',
+    customer_id: customerIdFromQuery || '',
     close_date: '',
     expected_close_date: '',
     priority: 'medium',
     source: '',
-    tags: []
+    tags: [],
+    invoice_id: null
   });
 
   const [customers, setCustomers] = useState([]);
@@ -37,6 +42,7 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
   const [errors, setErrors] = useState({});
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const isEdit = !!dealId;
 
@@ -99,7 +105,8 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
         expected_close_date: dealData.expected_close_date || '',
         priority: dealData.priority || 'medium',
         source: dealData.source || '',
-        tags: dealData.tags || []
+        tags: dealData.tags || [],
+        invoice_id: dealData.invoice_id || null
       });
 
       // Load deal products
@@ -147,6 +154,8 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
 
       const dealData = {
         ...formData,
+        close_date: formData.close_date || null,
+        expected_close_date: formData.expected_close_date || null,
         customer_name: customer?.name,
         customer_type: customer?.customer_type,
         salesperson_id: currentUser?.id,
@@ -218,6 +227,10 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
 
       if (onSave) {
         onSave(savedDealId);
+      } else if (!isEdit) {
+        // Keep the user on the newly created opportunity so an invoice can be
+        // added without leaving the deal workflow.
+        navigate(`/crm/deal/${savedDealId}/edit`, { replace: true });
       } else {
         navigate('/crm/pipeline');
       }
@@ -232,30 +245,28 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
     }
   };
 
-  // Convert to invoice
-  const handleConvertToInvoice = async () => {
-    if (!window.confirm('Convert this deal to an invoice? This will mark the deal as won.')) {
-      return;
-    }
-
+  const handleInvoiceCreated = async (invoice) => {
     setConverting(true);
     try {
-      // Call the database function
-      const { data, error } = await supabase
-        .rpc('convert_deal_to_invoice', {
-          p_deal_id: dealId
-        });
-
+      const { error } = await supabase
+        .from('deals')
+        .update({ invoice_id: invoice.id, stage: 'won', probability: 100 })
+        .eq('id', dealId);
       if (error) throw error;
-
-      alert('✅ Deal successfully converted to invoice!');
-      
-      if (onClose) onClose();
-      if (onSave) onSave(dealId);
-
+      await supabase.from('deal_activities').insert({
+        deal_id: dealId,
+        type: 'invoice',
+        title: 'Invoice Attached',
+        content: `Invoice ${invoice.invoice_number} was created and attached to this deal`,
+        author_id: currentUser?.id,
+        author_name: currentUser?.profile?.full_name || currentUser?.email
+      });
+      setFormData((current) => ({ ...current, invoice_id: invoice.id, stage: 'won', probability: 100 }));
+      setShowInvoiceModal(false);
+      alert(`✅ Invoice ${invoice.invoice_number} attached to this deal.`);
     } catch (error) {
-      console.error('Error converting deal:', error);
-      alert('Failed to convert deal: ' + error.message);
+      console.error('Error attaching invoice:', error);
+      alert('Invoice was created, but could not be attached to the deal: ' + error.message);
     } finally {
       setConverting(false);
     }
@@ -336,16 +347,21 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {isEdit && formData.stage === 'negotiation' && !formData.invoice_id && (
+            {isEdit && !formData.invoice_id && (
               <button
-                onClick={handleConvertToInvoice}
+                onClick={() => setShowInvoiceModal(true)}
                 disabled={converting}
                 className={`px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center gap-2 ${
                   converting ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               >
-                {converting ? 'Converting...' : '🎉 Convert to Invoice'}
+                {converting ? 'Attaching...' : 'Add Invoice'}
               </button>
+            )}
+            {isEdit && formData.invoice_id && (
+              <span className="px-3 py-2 rounded-lg bg-green-100 text-green-800 text-sm font-medium">
+                Invoice attached
+              </span>
             )}
             {onClose && (
               <button
@@ -705,6 +721,29 @@ const DealManager = ({ darkMode, currentUser, dealId, onClose, onSave }) => {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+        {showInvoiceModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto">
+            <div
+              className={`relative max-w-6xl mx-auto my-6 rounded-xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className={`sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b rounded-t-xl ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div>
+                  <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Create Invoice for Deal</h2>
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>The completed invoice will be attached to this opportunity.</p>
+                </div>
+                <button onClick={() => setShowInvoiceModal(false)} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-100'}`}>
+                  <X size={20} />
+                </button>
+              </div>
+              <SalesEntry
+                darkMode={darkMode}
+                initialCustomerId={formData.customer_id}
+                onInvoiceCreated={handleInvoiceCreated}
+              />
             </div>
           </div>
         )}
