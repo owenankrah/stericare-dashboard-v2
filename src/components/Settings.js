@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
  * - Admin tools
  */
 
-const Settings = ({ darkMode, setDarkMode, onClose, user, onNavigateToUserManagement }) => {
+const Settings = ({ darkMode, setDarkMode, compactMode, setCompactMode, onClose, user, onNavigateToUserManagement }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('account');
   
@@ -44,7 +44,6 @@ const Settings = ({ darkMode, setDarkMode, onClose, user, onNavigateToUserManage
   
   // Appearance
   const [fontSize, setFontSize] = useState('medium');
-  const [compactMode, setCompactMode] = useState(false);
   
   // Database tools
   const [backupStatus, setBackupStatus] = useState('');

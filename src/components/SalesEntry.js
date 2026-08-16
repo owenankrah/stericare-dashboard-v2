@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
  * ✅ Cache invalidation on save
  */
 
-const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
+const SalesEntry = ({ darkMode, onInvoiceCreated, initialCustomerId = null }) => {
   const navigate = useNavigate();
   // ==========================================
   // STATE MANAGEMENT
@@ -44,7 +44,12 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       units: 0,
       unitPrice: 0,
       costPerUnit: 0,
-      discount: 0
+      discount: 0,
+      priceListId: null,
+      priceListName: 'Standard price',
+      priceListType: 'standard',
+      assignmentType: 'default',
+      isPriceLocked: false
     }
   ]);
   
@@ -84,7 +89,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       const cached = queryCache.get(cacheKey);
       console.log('✅ Cache hit: Customers dropdown');
       setCustomers(cached);
-      return;
+      return cached;
     }
     
     // Fetch from database
@@ -98,6 +103,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
     setCustomers(data || []);
     queryCache.set(cacheKey, data || [], 600000);
     console.log('💾 Customers cached for 10 minutes');
+    return data || [];
   };
   
   // ==========================================
@@ -105,33 +111,38 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
   // ==========================================
   
   const loadProducts = async () => {
-    const cacheKey = 'products_dropdown';
+    const cacheKey = 'products_dropdown_with_inventory_v1';
     
     // Check cache (10 min TTL)
     if (queryCache.isValid(cacheKey, 600000)) {
       const cached = queryCache.get(cacheKey);
       console.log('✅ Cache hit: Products dropdown');
       setProducts(cached);
-      return;
+      return cached;
     }
     
     // Fetch from database
     console.log('📡 Fetching products...');
     const { data } = await supabase
       .from('products')
-      .select('*')
+      .select('*, inventory(boxes_in_stock, loose_units_in_stock, units_per_box)')
       .eq('is_active', true)
       .order('product_name');
     
     setProducts(data || []);
     queryCache.set(cacheKey, data || [], 600000);
     console.log('💾 Products cached for 10 minutes');
+    return data || [];
   };
   
   const loadMasterData = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadCustomers(), loadProducts()]);
+      const [loadedCustomers] = await Promise.all([loadCustomers(), loadProducts()]);
+      if (initialCustomerId) {
+        const initialCustomer = loadedCustomers.find((customer) => customer.id === initialCustomerId);
+        if (initialCustomer) selectCustomer(initialCustomer);
+      }
     } catch (error) {
       console.error('Error loading master data:', error);
     } finally {
@@ -173,7 +184,12 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         units: 0,
         unitPrice: 0,
         costPerUnit: 0,
-        discount: 0
+        discount: 0,
+        priceListId: null,
+        priceListName: 'Standard price',
+        priceListType: 'standard',
+        assignmentType: 'default',
+        isPriceLocked: false
       }
     ]);
   }, []);
@@ -207,6 +223,61 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
       }
       return item;
     }));
+  }, []);
+
+  const applyCustomerPrice = useCallback(async (lineId, product, quantity = 1) => {
+    if (!product) return;
+    const standardPrice = Number(product.selling_price || product.unit_price || 0);
+    if (!selectedCustomer?.id) {
+      setLineItems(prev => prev.map(item => item.id === lineId ? { ...item, unitPrice: standardPrice, priceListId: null, priceListName: 'Standard price' } : item));
+      return;
+    }
+    const { data, error } = await supabase.rpc('resolve_customer_product_price', {
+      p_customer_id: selectedCustomer.id,
+      p_product_id: product.id,
+      p_quantity: Math.max(1, Number(quantity || 1)),
+      p_on_date: saleDate
+    });
+    if (error) {
+      // The migration may not be deployed yet; invoice entry must still work at standard price.
+      console.warn('Custom pricing unavailable; using standard price:', error.message);
+      return;
+    }
+    const resolved = Array.isArray(data) ? data[0] : data;
+    if (resolved) {
+      setLineItems(prev => prev.map(item => item.id === lineId ? {
+        ...item,
+        unitPrice: Number(resolved.unit_price ?? standardPrice),
+        priceListId: resolved.price_list_id || null,
+        priceListName: resolved.price_list_name || 'Standard price',
+        priceListType: resolved.price_list_type || 'standard',
+        assignmentType: resolved.assignment_type || 'default',
+        isPriceLocked: Boolean(resolved.is_price_locked)
+      } : item));
+    }
+  }, [selectedCustomer, saleDate]);
+
+  const selectProductForLine = useCallback((lineId, product) => {
+    updateLineItem(lineId, 'product', product);
+    if (product) applyCustomerPrice(lineId, product, 1);
+  }, [updateLineItem, applyCustomerPrice]);
+
+  useEffect(() => {
+    if (!selectedCustomer?.id) return;
+    lineItems.forEach(item => {
+      if (item.product) applyCustomerPrice(item.id, item.product, item.units || 1);
+    });
+    // Reprice only when the customer or invoice date changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomer?.id, saleDate]);
+
+  const getAvailableStock = useCallback((product) => {
+    const inventory = Array.isArray(product?.inventory) ? product.inventory[0] : product?.inventory;
+    if (!inventory) return 0;
+    return (
+      Number(inventory.boxes_in_stock || 0) * Number(inventory.units_per_box || product?.units_per_box || 1) +
+      Number(inventory.loose_units_in_stock || 0)
+    );
   }, []);
   
   // ==========================================
@@ -345,7 +416,11 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
             line_profit: lineProfit,
             line_margin: lineMargin,
             discount_amount: lineDiscount,
-            line_total: lineTotal
+            line_total: lineTotal,
+            price_list_id: item.priceListId || null,
+            price_list_name: item.priceListName || 'Standard price',
+            price_list_type: item.priceListType || 'standard',
+            price_assignment_type: item.assignmentType || 'default'
           };
         });
       
@@ -414,7 +489,12 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
         units: 0,
         unitPrice: 0,
         costPerUnit: 0,
-        discount: 0
+        discount: 0,
+        priceListId: null,
+        priceListName: 'Standard price',
+        priceListType: 'standard',
+        assignmentType: 'default',
+        isPriceLocked: false
       }
     ]);
   }, []);
@@ -552,7 +632,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     value={item.product?.id || ''}
                     onChange={(e) => {
                       const product = products.find(p => p.id === e.target.value);
-                      updateLineItem(item.id, 'product', product);
+                      selectProductForLine(item.id, product);
                     }}
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
@@ -563,10 +643,21 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     <option value="">Select product...</option>
                     {products.map(product => (
                       <option key={product.id} value={product.id}>
-                        {product.product_name} (₵{product.selling_price || product.unit_price})
+                        {product.product_name} — Stock: {getAvailableStock(product)} units — ₵{product.selling_price || product.unit_price}
                       </option>
                     ))}
                   </select>
+                  {item.product && (
+                    <p className={`mt-1 text-xs font-medium ${
+                      Number(item.units || 0) > getAvailableStock(item.product)
+                        ? 'text-red-500'
+                        : darkMode ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}>
+                      Available stock: {getAvailableStock(item.product).toLocaleString()} units
+                      {Number(item.units || 0) > getAvailableStock(item.product) && ' — requested quantity exceeds stock'}
+                      <span className="block">Price source: {item.priceListName || 'Standard price'}</span>
+                    </p>
+                  )}
                 </div>
                 
                 {/* Boxes */}
@@ -592,6 +683,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     type="number"
                     value={item.units}
                     onChange={(e) => updateLineItem(item.id, 'units', e.target.value)}
+                    onBlur={() => item.product && applyCustomerPrice(item.id, item.product, item.units)}
                     min="0"
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
@@ -608,6 +700,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                     type="number"
                     value={item.unitPrice}
                     onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value))}
+                    disabled={item.isPriceLocked && !['admin', 'manager'].includes(currentUser?.role)}
                     step="0.01"
                     className={`w-full px-3 py-2 rounded border text-sm ${
                       darkMode
@@ -615,6 +708,7 @@ const SalesEntry = ({ darkMode, onInvoiceCreated }) => {
                         : 'bg-white border-gray-300 text-gray-900'
                     }`}
                   />
+                  {item.isPriceLocked && <p className="mt-1 text-xs text-amber-600">Contract price locked</p>}
                 </div>
                 
                 {/* Remove Button */}

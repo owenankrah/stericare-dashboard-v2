@@ -40,6 +40,9 @@ const InventoryManagement = ({ darkMode}) => {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [showInactiveProducts, setShowInactiveProducts] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   
   // Adjustment form
@@ -54,6 +57,7 @@ const InventoryManagement = ({ darkMode}) => {
   const [alerts, setAlerts] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [alertsLoading, setAlertsLoading] = useState(false);
+  const isAdmin = currentUser?.profile?.role === 'admin';
 
   // Statistics
   const [stats, setStats] = useState({
@@ -238,6 +242,57 @@ const loadProducts = async () => {
     setShowAdjustmentModal(true);
   };
 
+  const openNewProductModal = () => {
+    setEditingProduct(null);
+    setShowProductModal(true);
+  };
+
+  const openEditProductModal = (item) => {
+    setEditingProduct(item.products);
+    setShowProductModal(true);
+  };
+
+  const handleSaveProduct = async (values) => {
+    if (!isAdmin) throw new Error('Administrator access required');
+    if (editingProduct) {
+      const { error } = await supabase.from('products').update(values).eq('id', editingProduct.id);
+      if (error) throw error;
+      const { error: inventoryError } = await supabase
+        .from('inventory')
+        .update({ units_per_box: values.units_per_box })
+        .eq('product_id', editingProduct.id);
+      if (inventoryError) throw inventoryError;
+    } else {
+      const { data: product, error } = await supabase.from('products').insert(values).select().single();
+      if (error) throw error;
+      const { error: inventoryError } = await supabase.from('inventory').insert({
+        product_id: product.id,
+        boxes_in_stock: 0,
+        loose_units_in_stock: 0,
+        units_per_box: values.units_per_box
+      });
+      if (inventoryError) throw inventoryError;
+    }
+    queryCache.clearPattern('products_');
+    queryCache.clearPattern('inventory_');
+    await loadData();
+    setShowProductModal(false);
+    setEditingProduct(null);
+  };
+
+  const handleToggleProductActive = async (product) => {
+    if (!isAdmin) return;
+    const action = product.is_active ? 'deactivate' : 'reactivate';
+    if (!window.confirm(`${action === 'deactivate' ? 'Deactivate' : 'Reactivate'} ${product.name}? Historical records will be preserved.`)) return;
+    const { error } = await supabase.from('products').update({ is_active: !product.is_active }).eq('id', product.id);
+    if (error) {
+      alert(`Failed to ${action} product: ${error.message}`);
+      return;
+    }
+    queryCache.clearPattern('products_');
+    await loadData();
+  };
+
   const handleStockAdjustment = async (e) => {
     e.preventDefault();
 
@@ -333,7 +388,8 @@ const loadProducts = async () => {
     const isLowStock = totalUnits <= (product.reorder_level || 0);
     const matchesLowStock = !showLowStockOnly || isLowStock;
 
-    return matchesSearch && matchesCategory && matchesLowStock;
+    const matchesActive = product.is_active !== false || (isAdmin && showInactiveProducts);
+    return matchesSearch && matchesCategory && matchesLowStock && matchesActive;
   });
 
   if (loading) {
@@ -373,6 +429,15 @@ const loadProducts = async () => {
             </div>
             
             <div className="flex gap-2">
+              {isAdmin && (
+                <button
+                  onClick={openNewProductModal}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Plus size={20} />
+                  <span className="hidden sm:inline">New Product</span>
+                </button>
+              )}
               <button
                 onClick={loadAlerts}
                 disabled={alertsLoading}
@@ -490,7 +555,7 @@ const loadProducts = async () => {
           <>
             {/* Search and Filters */}
             <div className={`p-4 rounded-lg mb-6 ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 {/* Search */}
                 <div className="md:col-span-2">
                   <div className="relative">
@@ -525,6 +590,21 @@ const loadProducts = async () => {
                     ))}
                   </select>
                 </div>
+
+                {isAdmin && (
+                  <div>
+                    <button
+                      onClick={() => setShowInactiveProducts(!showInactiveProducts)}
+                      className={`w-full px-4 py-2 rounded-lg border transition-colors ${
+                        showInactiveProducts
+                          ? 'bg-gray-600 text-white border-gray-600'
+                          : darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                      }`}
+                    >
+                      {showInactiveProducts ? 'Hide Inactive' : 'Show Inactive'}
+                    </button>
+                  </div>
+                )}
 
                 {/* Low Stock Filter */}
                 <div>
@@ -562,6 +642,9 @@ const loadProducts = async () => {
                     item={item}
                     darkMode={darkMode}
                     onAdjust={() => openAdjustmentModal(item)}
+                    isAdmin={isAdmin}
+                    onEdit={() => openEditProductModal(item)}
+                    onToggleActive={() => handleToggleProductActive(item.products)}
                   />
                 ))}
               </div>
@@ -620,6 +703,14 @@ const loadProducts = async () => {
           }}
         />
       )}
+      {showProductModal && isAdmin && (
+        <ProductModal
+          darkMode={darkMode}
+          product={editingProduct}
+          onClose={() => { setShowProductModal(false); setEditingProduct(null); }}
+          onSave={handleSaveProduct}
+        />
+      )}
     </div>
   );
 };
@@ -654,7 +745,7 @@ const StatCard = ({ title, value, icon: Icon, color, darkMode, alert = false }) 
 };
 
 // Inventory Card Component
-const InventoryCard = ({ item, darkMode, onAdjust }) => {
+const InventoryCard = ({ item, darkMode, onAdjust, isAdmin, onEdit, onToggleActive }) => {
   const product = item.products;
   const totalUnits = (item.boxes_in_stock * item.units_per_box) + item.loose_units_in_stock;
   const reorderLevel = product?.reorder_level || 0;
@@ -694,6 +785,9 @@ const InventoryCard = ({ item, darkMode, onAdjust }) => {
             }`}>
               {statusText}
             </span>
+            {product?.is_active === false && (
+              <span className="px-2 py-0.5 text-xs rounded bg-gray-600 text-white">Inactive</span>
+            )}
           </div>
         </div>
       </div>
@@ -758,13 +852,117 @@ const InventoryCard = ({ item, darkMode, onAdjust }) => {
         )}
       </div>
 
-      <button
-        onClick={onAdjust}
-        className="w-full mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
-      >
-        <Edit2 size={16} />
-        Adjust Stock
-      </button>
+      <div className="grid grid-cols-1 gap-2 mt-3">
+        <button
+          onClick={onAdjust}
+          disabled={product?.is_active === false}
+          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-500 text-white text-sm rounded flex items-center justify-center gap-2"
+        >
+          <Edit2 size={16} /> Adjust Stock
+        </button>
+        {isAdmin && (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onEdit} className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded">Edit Details</button>
+            <button onClick={onToggleActive} className={`px-3 py-2 text-white text-sm rounded ${product?.is_active === false ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
+              {product?.is_active === false ? 'Reactivate' : 'Deactivate'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const ProductModal = ({ darkMode, product, onClose, onSave }) => {
+  const [form, setForm] = useState({
+    name: '', sku: '', product_code: '', category: '', description: '',
+    units_per_box: 1, unit_price: 0, selling_price: 0, cost_price: 0,
+    cost_per_unit: 0, reorder_level: 0, is_active: true
+  });
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  useEffect(() => {
+    if (product) {
+      setForm({
+        name: product.name || '', sku: product.sku || '', product_code: product.product_code || '',
+        category: product.category || '', description: product.description || '',
+        units_per_box: Number(product.units_per_box || 1), unit_price: Number(product.unit_price || 0),
+        selling_price: Number(product.selling_price || 0), cost_price: Number(product.cost_price || 0),
+        cost_per_unit: Number(product.cost_per_unit || 0), reorder_level: Number(product.reorder_level || 0),
+        is_active: product.is_active !== false
+      });
+    }
+  }, [product]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setFormError('');
+    setSavingProduct(true);
+    try {
+      await onSave({
+        ...form,
+        name: form.name.trim(),
+        sku: form.sku.trim() || null,
+        product_code: form.product_code.trim() || null,
+        category: form.category.trim() || null,
+        description: form.description.trim() || null,
+        units_per_box: Math.max(1, Number(form.units_per_box || 1)),
+        unit_price: Number(form.unit_price || 0),
+        selling_price: Number(form.selling_price || 0),
+        cost_price: Number(form.cost_price || 0),
+        cost_per_unit: Number(form.cost_per_unit || 0),
+        reorder_level: Math.max(0, Number(form.reorder_level || 0))
+      });
+    } catch (error) {
+      setFormError(error.message || 'Unable to save product');
+    } finally {
+      setSavingProduct(false);
+    }
+  };
+
+  const inputClass = `w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'}`;
+  const field = (name, label, type = 'text', options = {}) => (
+    <label>
+      <span className="block text-sm font-medium mb-1">{label}</span>
+      <input
+        type={type}
+        required={options.required}
+        min={options.min}
+        step={options.step}
+        value={form[name]}
+        onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}
+        className={inputClass}
+      />
+    </label>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
+      <form onSubmit={submit} className={`w-full max-w-3xl my-6 rounded-xl shadow-2xl ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div><h2 className="text-xl font-bold">{product ? 'Edit Product' : 'New Product'}</h2><p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Product and inventory master data</p></div>
+          <button type="button" onClick={onClose} className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}><X size={20} /></button>
+        </div>
+        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {field('name', 'Product name *', 'text', { required: true })}
+          {field('sku', 'SKU')}
+          {field('product_code', 'Product code')}
+          {field('category', 'Category')}
+          {field('units_per_box', 'Units per box *', 'number', { required: true, min: 1 })}
+          {field('reorder_level', 'Reorder level', 'number', { min: 0 })}
+          {field('selling_price', 'Selling price (GHS)', 'number', { min: 0, step: '0.01' })}
+          {field('unit_price', 'Unit price (GHS)', 'number', { min: 0, step: '0.01' })}
+          {field('cost_price', 'Cost price (GHS)', 'number', { min: 0, step: '0.01' })}
+          {field('cost_per_unit', 'Cost per unit (GHS)', 'number', { min: 0, step: '0.01' })}
+          <label className="md:col-span-2"><span className="block text-sm font-medium mb-1">Description</span><textarea rows={3} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className={inputClass} /></label>
+          {formError && <p className="md:col-span-2 text-sm text-red-500">{formError}</p>}
+        </div>
+        <div className={`flex justify-end gap-3 px-6 py-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+          <button type="button" onClick={onClose} className={`px-4 py-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>Cancel</button>
+          <button type="submit" disabled={savingProduct} className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">{savingProduct ? 'Saving...' : 'Save Product'}</button>
+        </div>
+      </form>
     </div>
   );
 };

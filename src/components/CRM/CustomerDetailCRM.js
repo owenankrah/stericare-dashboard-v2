@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileText, TrendingUp, Edit } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, MapPin, Building, Calendar, DollarSign, FileText, TrendingUp, Edit, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import SalesEntry from '../SalesEntry';
 
-const CustomerDetailCRM = ({ darkMode }) => {
+const CustomerDetailCRM = ({ darkMode, currentUser }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   
@@ -19,6 +20,16 @@ const CustomerDetailCRM = ({ darkMode }) => {
   });
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('timeline');
+  const [deals, setDeals] = useState([]);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [activityForm, setActivityForm] = useState({ deal_id: '', type: 'call', title: '', content: '', follow_up_at: '' });
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState([]);
+  const [effectivePriceLists, setEffectivePriceLists] = useState([]);
+  const [savingGroups, setSavingGroups] = useState(false);
+  const canManagePricing = ['admin', 'manager'].includes(currentUser?.profile?.role);
 
   const loadCustomerData = useCallback(async () => {
     setLoading(true);
@@ -38,6 +49,15 @@ const CustomerDetailCRM = ({ darkMode }) => {
 
       setCustomer(customerData);
 
+      const [groupsResult, membershipsResult, pricingResult] = await Promise.all([
+        supabase.from('customer_groups').select('id, name, code').eq('is_active', true).order('name'),
+        supabase.from('customer_group_members').select('group_id').eq('customer_id', id).eq('is_active', true),
+        supabase.from('customer_effective_price_lists').select('*').eq('customer_id', id).order('priority')
+      ]);
+      if (!groupsResult.error) setCustomerGroups(groupsResult.data || []);
+      if (!membershipsResult.error) setSelectedGroupIds((membershipsResult.data || []).map(item => item.group_id));
+      if (!pricingResult.error) setEffectivePriceLists(pricingResult.data || []);
+
       // Load invoices
       const { data: invoicesData, error: invoicesError } = await supabase
         .from('invoices')
@@ -48,6 +68,14 @@ const CustomerDetailCRM = ({ darkMode }) => {
 
       if (invoicesError) throw invoicesError;
       setInvoices(invoicesData || []);
+
+      const { data: dealsData, error: dealsError } = await supabase
+        .from('deals')
+        .select('id, title, stage, value, created_at, deal_activities(*)')
+        .eq('customer_id', id)
+        .order('created_at', { ascending: false });
+      if (dealsError) throw dealsError;
+      setDeals(dealsData || []);
 
       // Calculate stats
       if (invoicesData && invoicesData.length > 0) {
@@ -73,7 +101,16 @@ const CustomerDetailCRM = ({ darkMode }) => {
         invoiceNumber: inv.invoice_number
       }));
 
-      setActivities(invoiceActivities);
+      const dealActivities = (dealsData || []).flatMap(deal => (deal.deal_activities || []).map(activity => ({
+        type: activity.type || 'note',
+        title: activity.title || 'Deal activity',
+        description: activity.content || '',
+        date: activity.follow_up_at || activity.created_at,
+        status: deal.stage,
+        dealId: deal.id,
+        dealTitle: deal.title
+      })));
+      setActivities([...invoiceActivities, ...dealActivities].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
 
     } catch (error) {
       console.error('Error loading customer:', error);
@@ -81,6 +118,68 @@ const CustomerDetailCRM = ({ darkMode }) => {
       setLoading(false);
     }
   }, [id]);
+
+  const openActivity = (type) => {
+    setActivityForm({
+      deal_id: deals[0]?.id || '',
+      type,
+      title: type === 'follow_up' ? 'Customer follow-up' : 'Customer activity',
+      content: '',
+      follow_up_at: type === 'follow_up' ? new Date().toISOString().slice(0, 16) : ''
+    });
+    setShowActivityModal(true);
+  };
+
+  const saveActivity = async (event) => {
+    event.preventDefault();
+    if (!activityForm.deal_id) {
+      window.alert('Create or select a deal before logging an activity.');
+      return;
+    }
+    setSavingActivity(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: activityError } = await supabase.from('deal_activities').insert({
+        deal_id: activityForm.deal_id,
+        type: activityForm.type,
+        content: `${activityForm.title.trim()}\n${activityForm.content.trim()}${activityForm.follow_up_at ? `\nFollow up: ${new Date(activityForm.follow_up_at).toLocaleString()}` : ''}`,
+        author_id: user?.id || null
+      });
+      if (activityError) throw activityError;
+      setShowActivityModal(false);
+      await loadCustomerData();
+    } catch (activityError) {
+      window.alert(activityError.message || 'Unable to save activity.');
+    } finally {
+      setSavingActivity(false);
+    }
+  };
+
+  const saveCustomerGroups = async () => {
+    setSavingGroups(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: existing, error: existingError } = await supabase.from('customer_group_members').select('group_id, is_active').eq('customer_id', id);
+      if (existingError) throw existingError;
+      const existingIds = (existing || []).map(item => item.group_id);
+      const operations = [];
+      selectedGroupIds.forEach(groupId => {
+        if (existingIds.includes(groupId)) operations.push(supabase.from('customer_group_members').update({ is_active: true }).eq('customer_id', id).eq('group_id', groupId));
+        else operations.push(supabase.from('customer_group_members').insert({ customer_id: id, group_id: groupId, created_by: user?.id }));
+      });
+      existingIds.filter(groupId => !selectedGroupIds.includes(groupId)).forEach(groupId => {
+        operations.push(supabase.from('customer_group_members').update({ is_active: false }).eq('customer_id', id).eq('group_id', groupId));
+      });
+      const results = await Promise.all(operations);
+      const failed = results.find(result => result.error);
+      if (failed) throw failed.error;
+      await loadCustomerData();
+    } catch (groupError) {
+      window.alert(groupError.message || 'Unable to update customer groups.');
+    } finally {
+      setSavingGroups(false);
+    }
+  };
 
   useEffect(() => {
     loadCustomerData();
@@ -493,22 +592,40 @@ const CustomerDetailCRM = ({ darkMode }) => {
 
             {/* Quick Actions */}
             <div className={`rounded-xl p-6 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
+              <h3 className={`font-semibold mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Pricing & Customer Groups</h3>
+              <div className="space-y-2 mb-4">
+                {customerGroups.length === 0 ? <p className="text-sm opacity-60">No customer groups configured.</p> : customerGroups.map(group => (
+                  <label key={group.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" disabled={!canManagePricing} checked={selectedGroupIds.includes(group.id)} onChange={() => setSelectedGroupIds(current => current.includes(group.id) ? current.filter(groupId => groupId !== group.id) : [...current, group.id])}/>
+                    <span>{group.name} <span className="opacity-60">({group.code})</span></span>
+                  </label>
+                ))}
+              </div>
+              {canManagePricing && <button onClick={saveCustomerGroups} disabled={savingGroups} className="w-full rounded-lg bg-blue-600 text-white px-3 py-2 text-sm font-medium disabled:opacity-50">{savingGroups ? 'Saving…' : 'Save Group Memberships'}</button>}
+              <div className="mt-4 border-t border-gray-500/20 pt-3">
+                <div className="text-xs uppercase tracking-wide opacity-60 mb-2">Effective pricing</div>
+                {effectivePriceLists.length === 0 ? <p className="text-sm">Standard prices</p> : effectivePriceLists.map(list => <div key={`${list.price_list_id}-${list.assignment_type}`} className="text-sm mb-2"><div className="font-medium">{list.price_list_name}</div><div className="text-xs opacity-60">{list.list_type} · via {list.customer_group_name || 'direct assignment'} · priority {list.priority}</div></div>)}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className={`rounded-xl p-6 ${darkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'}`}>
               <h3 className={`font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Quick Actions
               </h3>
               <div className="space-y-2">
                 <button
-                  onClick={() => navigate('/sales-invoicing')}
+                  onClick={() => setShowInvoiceModal(true)}
                   className="w-full px-4 py-2 bg-[#5EEAD4] hover:bg-[#5EEAD4]/90 text-[#1E3A8A] rounded-lg text-sm font-medium"
                 >
                   Create Invoice
                 </button>
-                <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
+                <button onClick={() => openActivity('call')} className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
                   darkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-50 text-gray-900'
                 }`}>
                   Log Activity
                 </button>
-                <button className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
+                <button onClick={() => openActivity('follow_up')} className={`w-full px-4 py-2 rounded-lg text-sm font-medium border ${
                   darkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-300' : 'border-gray-300 hover:bg-gray-50 text-gray-900'
                 }`}>
                   Schedule Follow-up
@@ -521,6 +638,37 @@ const CustomerDetailCRM = ({ darkMode }) => {
         </div>
 
       </div>
+
+      {showInvoiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto">
+          <div className={`max-w-6xl mx-auto rounded-xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+            <div className="sticky top-0 z-10 flex justify-between items-center px-6 py-4 border-b bg-inherit rounded-t-xl">
+              <h2 className="text-xl font-semibold">Create invoice for {customer.name}</h2>
+              <button onClick={() => setShowInvoiceModal(false)} aria-label="Close invoice"><X size={24} /></button>
+            </div>
+            <SalesEntry darkMode={darkMode} initialCustomerId={id} onInvoiceCreated={() => { setShowInvoiceModal(false); loadCustomerData(); }} />
+          </div>
+        </div>
+      )}
+
+      {showActivityModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center">
+          <form onSubmit={saveActivity} className={`w-full max-w-lg rounded-xl p-6 shadow-2xl ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}>
+            <div className="flex justify-between items-center mb-5"><h2 className="text-xl font-semibold">Log pipeline activity</h2><button type="button" onClick={() => setShowActivityModal(false)}><X size={22} /></button></div>
+            {deals.length === 0 ? (
+              <div className="mb-4 rounded-lg bg-amber-50 text-amber-800 p-3 text-sm">This customer has no deal yet. Create a deal first so the activity can appear in the pipeline.</div>
+            ) : (
+              <div className="space-y-4">
+                <label className="block text-sm">Deal<select required value={activityForm.deal_id} onChange={(e) => setActivityForm({ ...activityForm, deal_id: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`}>{deals.map(deal => <option key={deal.id} value={deal.id}>{deal.title}</option>)}</select></label>
+                <label className="block text-sm">Title<input required value={activityForm.title} onChange={(e) => setActivityForm({ ...activityForm, title: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>
+                <label className="block text-sm">Notes<textarea required rows="4" value={activityForm.content} onChange={(e) => setActivityForm({ ...activityForm, content: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>
+                {activityForm.type === 'follow_up' && <label className="block text-sm">Follow-up date<input type="datetime-local" value={activityForm.follow_up_at} onChange={(e) => setActivityForm({ ...activityForm, follow_up_at: e.target.value })} className={`mt-1 w-full rounded-lg border px-3 py-2 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-300'}`} /></label>}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowActivityModal(false)} className="px-4 py-2 rounded-lg border">Cancel</button>{deals.length > 0 && <button disabled={savingActivity} className="px-4 py-2 rounded-lg bg-[#5EEAD4] text-[#1E3A8A] font-medium">{savingActivity ? 'Saving…' : 'Save activity'}</button>}</div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };

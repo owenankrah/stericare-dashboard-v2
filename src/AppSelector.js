@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon } from 'lucide-react';
+import { BarChart3, Package, Users, LogOut, Settings as SettingsIcon, Sun, Moon, Tags } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Settings from './components/Settings';
 
-const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
+const AppSelector = ({ user, onLogout, darkMode, setDarkMode, compactMode, setCompactMode }) => {
   const [showSettings, setShowSettings] = useState(false);
   const navigate = useNavigate();
 
@@ -57,6 +57,16 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
       color: 'purple',
       status: 'active',
       gradient: 'from-purple-500 to-purple-600'
+    },
+    {
+      id: 'pricing-management',
+      name: 'Pricing Management',
+      description: 'Customer groups, contracts, promotions and custom price lists',
+      icon: Tags,
+      color: 'blue',
+      status: 'active',
+      gradient: 'from-cyan-500 to-blue-600',
+      managerOnly: true
     }
   ];
   
@@ -64,6 +74,9 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
   const visibleApps = apps.filter(app => {
     if (app.adminOnly) {
       return user?.profile?.role === 'admin';
+    }
+    if (app.managerOnly) {
+      return ['admin', 'manager'].includes(user?.profile?.role);
     }
     return true;
   });
@@ -283,6 +296,9 @@ const AppSelector = ({ user, onLogout, darkMode, setDarkMode }) => {
       {showSettings && (
         <Settings
           darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
           user={user}
           onClose={() => setShowSettings(false)}
           onNavigateToUserManagement={handleNavigateToUserManagement}
