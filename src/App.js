@@ -82,26 +82,44 @@ function App() {
     checkSession();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Auth] Event:', event);
-        
-        if (event === 'SIGNED_IN' && session) {
-          const { data: profile } = await supabase
+  (event, session) => {
+    console.log('[Auth] Event:', event);
+
+    if (event === 'SIGNED_IN' && session) {
+      setTimeout(async () => {
+        try {
+          const { data: profile, error } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
-            
-          setCurrentUser({ ...session.user, profile });
+
+          if (error) {
+            console.error('[Auth] Profile error:', error);
+          }
+
+          setCurrentUser({
+            ...session.user,
+            profile: profile || null,
+          });
+
           setIsAuthenticated(true);
-          console.log('[Auth] User authenticated:', session.user.email);
-        } else if (event === 'SIGNED_OUT') {
-          setIsAuthenticated(false);
-          setCurrentUser(null);
-          console.log('[Auth] User signed out');
+          console.log(
+            '[Auth] User authenticated:',
+            session.user.email,
+          );
+        } finally {
+          setLoading(false);
         }
-      }
-    );
+      }, 0);
+    } else if (event === 'SIGNED_OUT') {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setLoading(false);
+      console.log('[Auth] User signed out');
+    }
+  },
+);
 
     return () => subscription.unsubscribe();
   }, []);
